@@ -11,7 +11,7 @@ set(_${COMPONENT_NAME}_sources
 #list(APPEND LIBRARIES ${MPI_CXX_LIBRARIES})
 
 #set_target_properties(_${COMPONENT_NAME} PROPERTIES INSTALL_RPATH "\$ORIGIN/..")
-find_package(Torch REQUIRED)
+#find_package(Torch REQUIRED)
 pybind11_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} NO_EXTRAS)
 target_link_libraries(_${COMPONENT_NAME} PRIVATE "${TORCH_LIBRARIES}")
 #target_link_libraries(_${COMPONENT_NAME} PRIVATE ${LIBRARIES})

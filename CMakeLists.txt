@@ -14,7 +14,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 #include(SetupPybind11.cmake)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tpstorch/extern/pybind11)
 include(CompilerFlagsSetup.cmake)
-
+include(GetTorchPath.cmake)
+find_package(Torch REQUIRED)
 
 # plugins must be built as shared libraries
 if (ENABLE_STATIC)
@@ -22,15 +23,6 @@ if (ENABLE_STATIC)
 endif (ENABLE_STATIC)
 
 set(BUILD_SHARED_LIBS on)
-
-#Set the install directory to be the site-packages folder
-#execute_process(
-#  COMMAND "${PYTHON_EXECUTABLE}" -c "if True:
-#    import site 
-#    print(site.getsitepackages()[0])"
-#  OUTPUT_VARIABLE PYTHON_MODULE_BASE_DIR
-#  OUTPUT_STRIP_TRAILING_WHITESPACE)
-#set(CMAKE_INSTALL_PREFIX ${PYTHON_MODULE_BASE_DIR})
 
 # include current source directory as its own include directory
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
