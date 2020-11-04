@@ -5,7 +5,7 @@ At the moment, building and installation is just:
 
 ```console
 
-cmake -DCMAKE_PREFIX_PATH="/path/to/libtorch" ../
+cmake ../
 make -j6
 pip install .
 
