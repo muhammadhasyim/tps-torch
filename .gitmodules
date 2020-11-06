@@ -1,3 +1,6 @@
 [submodule "tpstorch/extern/pybind11"]
 	path = tpstorch/extern/pybind11
 	url = https://github.com/pybind/pybind11.git
+[submodule "tpstorch/extern/torchinterp1d"]
+	path = tpstorch/extern/torchinterp1d
+	url = https://github.com/aliutkus/torchinterp1d.git
