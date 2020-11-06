@@ -1,7 +1,7 @@
 import tpstorch
 import torch
 import torch.distributed as dist
-#from tpstorch import _tpstorch
+from tpstorch.fts import _fts
 
 #A class that interfaces with an existing MD/MC code. Its main job is to streamline 
 #An existing MD code with an FTS method Class. 

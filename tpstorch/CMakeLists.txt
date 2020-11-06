@@ -12,7 +12,7 @@ set(_${COMPONENT_NAME}_sources
 #find_package(MPI REQUIRED)
 
 pybind11_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} NO_EXTRAS)
-target_link_libraries(_${COMPONENT_NAME} PRIVATE "${TORCH_LIBRARIES}")
+target_link_libraries(_${COMPONENT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 add_custom_target(copy_${COMPONENT_NAME} ALL DEPENDS ${files})
 
 #Link our .py scripts so that CMake updates them for newer builds
