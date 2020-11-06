@@ -5,16 +5,17 @@
 //Just a test function that gets called when module gets imported 
 namespace detail
 {
-    int initialize()
+    void initialize()
     {
+        //std::cout << "Testing TPS-Torch module. Here's printing an identity matrix from the C++ side " << std::endl;
         torch::Tensor tensor = torch::eye(3);
-        std::cout << tensor << std::endl;
-        return 0;
+        //std::cout << tensor << std::endl;
+        //return 0;
     }
 
 }
 
 PYBIND11_MODULE(_tpstorch, m)
 {
-   int external_init = detail::initialize();
+   detail::initialize();
 }
