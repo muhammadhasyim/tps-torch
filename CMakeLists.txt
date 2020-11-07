@@ -34,3 +34,11 @@ add_subdirectory(${PROJECT_NAME})
 
 #copy setup.py do I need it?
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py ${CMAKE_CURRENT_BINARY_DIR}/setup.py COPYONLY)
+
+set(cmake_scripts 
+    GetTorchPath.cmake
+    )
+
+foreach(file ${cmake_scripts})
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/${file} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}/CMake)
+endforeach()
