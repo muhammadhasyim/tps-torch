@@ -27,4 +27,5 @@ foreach(file ${files})
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${file} ${CMAKE_CURRENT_BINARY_DIR}/${file} COPYONLY)
 endforeach()
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/extern/pybind11/include/pybind11 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
 add_subdirectory(fts)

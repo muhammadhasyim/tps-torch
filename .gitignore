@@ -21,6 +21,7 @@ __pycache__/
 #ignore the folder called build anywhere, but not files called build
 build/
 build/*
+build*/
 test-py/
 test-py/*
 
