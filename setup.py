@@ -8,6 +8,6 @@ setup(name='tpstorch',
       author_email='muhammad_hasyim@berkeley.edu, chbatton@berkeley.edu',
       license='MIT',
       packages=find_packages(),
-      package_data={"":["*.so"]},
+      package_data={"":["*.so","include/tpstorch/*.h","include/tpstorch/fts/*.h"]},
       install_requires=['numpy','scipy'],
       zip_safe=False)

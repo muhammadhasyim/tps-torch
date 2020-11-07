@@ -12,19 +12,16 @@ class FTSSampler
 {
     public:
         //Default constructor creates 3x3 identity matrix
-        FTSSampler()
-        {
-            cur_config = torch::eye(3);
-        };
+        FTSSampler(){};
         virtual ~FTSSampler(){};
-        virtual void runSimulation()
+        virtual void runSimulation(int nsteps, const torch::Tensor& weights, const torch::Tensor& biases)
         {
-            //Do nothing for nowi
+            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
             //Might try and raise an error if this base method gets called instead
         };
         virtual torch::Tensor getConfig()
         {
-            return cur_config;
+            return torch::eye(3);
         };
         virtual void dumpConfig()
         {
@@ -32,8 +29,6 @@ class FTSSampler
             //Might try and raise an error if this base method gets called instead
         };
     private:
-        //The current configuration in Torch tensor format
-        torch::Tensor cur_config;
 };
 
 void export_FTSSampler(py::module& m)
