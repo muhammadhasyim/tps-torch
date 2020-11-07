@@ -1,5 +1,15 @@
 from setuptools import setup, find_packages
-
+import os
+"""
+def copy_dir(dir_path):
+    base_dir = os.path.join('tpstorch/', dir_path)
+    for (dirpath, dirnames, files) in os.walk(base_dir):
+        for f in files:
+            if "git" in f:
+                continue
+            else:
+                yield os.path.join(dirpath.split('/', 1)[1], f)
+"""
 setup(name='tpstorch',
       version='0.1',
       description='Some Random Package',
@@ -8,6 +18,9 @@ setup(name='tpstorch',
       author_email='muhammad_hasyim@berkeley.edu, chbatton@berkeley.edu',
       license='MIT',
       packages=find_packages(),
-      package_data={"":["*.so","CMake/*.cmake", "include/tpstorch/*.h","include/tpstorch/fts/*.h", "include/pybind11/*.h","include/pybind11/detail/*.h"]},
-      install_requires=['numpy','scipy'],
+      package_data={"":["*.so",
+                        "CMake/*.cmake",
+                        "include/tpstorch/*.h",
+                        "include/tpstorch/fts/*.h"]},
+      install_requires=['numpy','scipy','pybind11'],
       zip_safe=False)

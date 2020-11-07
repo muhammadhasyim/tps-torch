@@ -34,7 +34,7 @@ find_path(FOUND_TORCH_ROOT
 if(FOUND_TORCH_ROOT)
     set(TORCH_ROOT ${FOUND_TORCH_ROOT} CACHE FILEPATH "Directory containing a torch installation (i.e. __init__.py)" FORCE)
     message(STATUS "Found torch installation at " ${TORCH_ROOT})
-    set(CMAKE_PREFIX_PATH ${TORCH_ROOT})
+    list(APPEND CMAKE_PREFIX_PATH ${TORCH_ROOT})
 else(FOUND_TORCH_ROOT)
     message(FATAL_ERROR "Could not find torch installation, either set TORCH_ROOT or set PYTHON_EXECUTABLE to a python which can find torch")
 endif(FOUND_TORCH_ROOT)

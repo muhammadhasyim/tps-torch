@@ -24,7 +24,6 @@ class FTSSampler
             //Do nothing for nowi
             //Might try and raise an error if this base method gets called instead
         };
-    private:
 };
 
 

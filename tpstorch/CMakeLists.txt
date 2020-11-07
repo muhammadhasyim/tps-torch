@@ -13,7 +13,6 @@ set(_${COMPONENT_NAME}_sources
 
 pybind11_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} NO_EXTRAS)
 target_link_libraries(_${COMPONENT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
-add_custom_target(copy_${COMPONENT_NAME} ALL DEPENDS ${files})
 
 #Link our .py scripts so that CMake updates them for newer builds
 set(files   __init__.py
@@ -27,5 +26,8 @@ foreach(file ${files})
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${file} ${CMAKE_CURRENT_BINARY_DIR}/${file} COPYONLY)
 endforeach()
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/extern/pybind11/include/pybind11 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
+add_custom_target(copy_${COMPONENT_NAME} ALL DEPENDS ${files})
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/extern/pybind11 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/extern/)
+
 add_subdirectory(fts)
