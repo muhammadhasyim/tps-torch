@@ -58,11 +58,16 @@ endif (NOT TPSTORCH_FOUND)
 
 #############################################################
 ## Now that we've found tpstorch, lets do some setup
-#if (TPSTORCH_FOUND)
-# run all of HOOMD's generic lib setup scripts
 list(APPEND CMAKE_MODULE_PATH 	${TPSTORCH_ROOT})
 list(APPEND CMAKE_MODULE_PATH 	${TPSTORCH_ROOT}/CMake)
+#Include directories for TPSTorch
 include_directories(${TPSTORCH_INCLUDE_DIR})
+#Set up variables for TPSTorch Libraries
+set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
+
+#Now, Find pybind11, which should be installed along with TPSTorch
 set(find_pybind11_script "
 from __future__ import print_function;
 import sys, os; sys.stdout = open(os.devnull, 'w')
@@ -73,14 +78,14 @@ execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "${find_pybind11_script}"
                 ERROR_VARIABLE pybind11_dir)
 
 set(PYBIND11_CMAKE_ROOT ${pybind11_dir}/share/cmake/pybind11)
-message(STATUS ${PYBIND11_CMAKE_ROOT})
 list(APPEND CMAKE_PREFIX_PATH ${PYBIND11_CMAKE_ROOT})
-find_package(pybind11 CONFIG REQUIRED)# PATHS PYBIND11_CMAKE_ROOT NO_DEFAULT_PATH)
+find_package(pybind11 CONFIG REQUIRED)
+
+#Finally, look for Torch
 #list(APPEND CMAKE_PREFIX_PATH ${TPSTORCH_ROOT}/extern/pybind11/include)
 include(GetTorchPath)
-##Need to comment this out because I need to figure out if we need to even import the libraries as well
-set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
-set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
-set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
+find_package(Torch REQUIRED)
+find_library(TORCH_PYTHON_LIBRARY torch_python PATHS "${TORCH_INSTALL_PREFIX}/lib")
+message(STATUS "Found Torch Python Library: ${TORCH_PYTHON_LIBRARY}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-    #endif (TPSTORCH_FOUND)

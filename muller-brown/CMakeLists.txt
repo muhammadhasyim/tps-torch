@@ -10,13 +10,8 @@ set(CMAKE_NO_BUILTIN_CHRPATH TRUE)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
-#Finding TPSTorch
+#Finding TPSTorch, pybind11, and Torch
 include(FindTPSTorch.cmake)
-#Setting Up Torch
-find_package(Torch REQUIRED)
-find_library(TORCH_PYTHON_LIBRARY torch_python PATHS "${TORCH_INSTALL_PREFIX}/lib")
-message(STATUS "Found Torch Python Library: ${TORCH_PYTHON_LIBRARY}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 # Plugins must be built as shared libraries
 if (ENABLE_STATIC)
@@ -31,6 +26,7 @@ set(${CMAKE_PROJECT_NAME}_sources
     mysampler.cpp
     )
 
+file(COPY ${CMAKE_SOURCE_DIR}/test.py DESTINATION ${CMAKE_BINARY_DIR})
 #add_executable is what you normally use as the compiled object. For Python modules, we use pybind11_add_module instead
 #add_executable(${CMAKE_PROJECT_NAME} ${${CMAKE_PROJECT_NAME}_sources})
 pybind11_add_module(${CMAKE_PROJECT_NAME} SHARED ${${CMAKE_PROJECT_NAME}_sources} NO_EXTRAS)
