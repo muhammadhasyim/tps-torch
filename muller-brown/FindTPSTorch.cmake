@@ -79,8 +79,8 @@ find_package(pybind11 CONFIG REQUIRED)# PATHS PYBIND11_CMAKE_ROOT NO_DEFAULT_PAT
 #list(APPEND CMAKE_PREFIX_PATH ${TPSTORCH_ROOT}/extern/pybind11/include)
 include(GetTorchPath)
 ##Need to comment this out because I need to figure out if we need to even import the libraries as well
-#set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
-#set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
-#set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
+set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
 
     #endif (TPSTORCH_FOUND)

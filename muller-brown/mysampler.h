@@ -1,25 +1,33 @@
+#ifndef MYSAMPLER_H_
+#define MYSAMPLER_H_
+
 #include <tpstorch/fts/FTSSampler.h>
+#include <torch/extension.h>
 #include "muller_brown.h"
+#include <pybind11/pybind11.h>
 
 class MySampler : public FTSSampler
 {
     public:
         MySampler(std::string param_file)
+            : system(new MullerBrown())
         {
             //Load parameters during construction
-            system.GetParams(param_file);
+            system->GetParams(param_file);
         };
         ~MySampler(){}; 
         void runSimulation(int nsteps, const torch::Tensor& weights, const torch::Tensor& biases)
         {
+            system->Simulate(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
         torch::Tensor getConfig()
         {
-            torch::Tensor config = torch::ones({2});
+            torch::Tensor config = torch::ones(2);
             //Because system state is in a struct, we allocate one by one
-            config[0] = system.state.x;
-            config[1] = system.state.y;
+            config[0] = system->state.x;
+            config[1] = system->state.y;
+            //std::cout << config << std::endl;
             return config;
         };
         void dumpConfig()
@@ -29,5 +37,8 @@ class MySampler : public FTSSampler
         };
     private:
         //The MullerBrown simulator 
-        MullerBrown system;
+        //I did shared_ptr so that it can clean up itself during destruction
+        std::shared_ptr<MullerBrown> system;
 };
+
+#endif

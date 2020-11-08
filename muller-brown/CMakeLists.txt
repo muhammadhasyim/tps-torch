@@ -34,5 +34,5 @@ set(${CMAKE_PROJECT_NAME}_sources
 #add_executable is what you normally use as the compiled object. For Python modules, we use pybind11_add_module instead
 #add_executable(${CMAKE_PROJECT_NAME} ${${CMAKE_PROJECT_NAME}_sources})
 pybind11_add_module(${CMAKE_PROJECT_NAME} SHARED ${${CMAKE_PROJECT_NAME}_sources} NO_EXTRAS)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY} ${TPSTORCH_LIBRARIES})
 set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY CXX_STANDARD 14)
