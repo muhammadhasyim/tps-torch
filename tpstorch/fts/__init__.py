@@ -130,12 +130,13 @@ class FTSMethod:
         #Update the string
         self.update()
     #Dump the string into a file
-    def dump(self):
-        for counter, io in enumerate(self.string_io):
-            for item in self.string[counter+1]:
-                io.write("{}".format(item))
-            io.write("\n")
-            for item in self.avgconfig[counter]:
-                self.avgconfig_io[counter].write("{}".format(item))
-            self.avgconfig_io[counter].write("\n")
+    def dump(selfi,dumpstring=False):
+        if dumpstring:
+            for counter, io in enumerate(self.string_io):
+                for item in self.string[counter+1]:
+                    io.write("{} ".format(item))
+                io.write("\n")
+                for item in self.avgconfig[counter]:
+                    self.avgconfig_io[counter].write("{} ".format(item))
+                self.avgconfig_io[counter].write("\n")
         self.sampler.dump()
