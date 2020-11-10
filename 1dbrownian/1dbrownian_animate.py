@@ -13,7 +13,7 @@ num_nodes = 12+2#8
 strings = []
 bp = []
 for i in range(num_nodes-2):
-    strings.append(np.loadtxt("string_{}.txt".format(i+1)))
+    strings.append(np.loadtxt("string_{}.xyz".format(i+1)))
     bp.append(np.loadtxt("bp_{}.txt".format(i+1)))
 x = np.linspace(-1.6,1.6)
 
@@ -41,6 +41,6 @@ def animate(i):
 # Set up formatting for the movie files
 Writer = animation.writers['ffmpeg']
 writer = Writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-ani = animation.FuncAnimation(fig, animate, len(strings[0]), interval=200, repeat=False,blit=True)
+ani = animation.FuncAnimation(fig, animate, len(strings[0]), interval=1, repeat=False,blit=True)
 #ani.save('im.mp4', writer=writer)
 plt.show()
