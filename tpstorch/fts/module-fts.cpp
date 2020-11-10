@@ -1,5 +1,4 @@
 #include "FTSSampler.h"
-#include "FTSMethod.h"
 #include <torch/extension.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -51,20 +50,7 @@ void export_FTSSampler(py::module& m)
     ;
 };
 
-/*
-void export_FTSMethod(py::module& m)
-{
-    py::class_<FTSMethod, PyFTSMethod, std::shared_ptr<FTSMethod> > (m, "FTSMethod")
-    .def(py::init<torch::Tensor, torch::Tensor, std::shared_ptr<FTSSampler>, std::shared_ptr<c10d::ProcessGroupMPI>, double, double, int, bool>())
-    .def("updateString", &FTSMethod::updateString)
-    .def("dumpConfig", &FTSMethod::dumpConfig)
-    .def("runFTSMethod", &FTSMethod::runFTSMethod)
-    .def("dumpXYZ", &FTSMethod::dumpXYZ)
-    ;
-};
-*/
 PYBIND11_MODULE(_fts, m)
 {
     export_FTSSampler(m);
-    //export_FTSMethod(m);
 }
