@@ -10,8 +10,9 @@ set(_${SUBCOMPONENT_NAME}_headers
     FTSSampler.h
     )
 
+include_directories(${MPI_CXX_INCLUDE_DIRS})
 pybind11_add_module(_${SUBCOMPONENT_NAME} SHARED ${_${SUBCOMPONENT_NAME}_sources} NO_EXTRAS)
-target_link_libraries(_${SUBCOMPONENT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+target_link_libraries(_${SUBCOMPONENT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY} ${MPI_CXX_LIBRARIES})
 
 set(files   __init__.py
     )

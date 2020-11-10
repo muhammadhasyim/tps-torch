@@ -5,21 +5,30 @@ from tpstorch.fts import _fts
 
 #A class that interfaces with an existing MD/MC code. Its main job is to streamline 
 #An existing MD code with an FTS method Class. 
-
+class FTSSampler(_fts.FTSSampler):
+    pass
 #Class for Handling Finite-Temperature String Method (non-CVs)
 #Maybe I'd rather have some methods inside a C++ class?
 
 class FTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
-        
         #The MD Ssimulation object, which interfaces with an MD Library
         self.sampler = sampler
-        
-        self.config_size = sampler.get().size()
-        
+        #String timestep 
         self.deltatau = deltatau
-        self.kappa = kappa
+        #Regularization strength
+        self.kappa = kappa*num_nodes*deltatau
+        #Number of nodes including endpoints
         self.num_nodes = num_nodes
+        #Number of samples in the running average
+        self.nsamples = 0
+        #Timestep
+        self.timestep = 0
+
+        #Saving the typical configuration size
+        #TO DO: assert the config_size as defining a rank-2 tensor. Or else abort the simulation!
+        self.config_size = initial_config.size()
+        
         #Nodal parameters
         self.alpha = torch.linspace(0,1,num_nodes)
         
@@ -30,53 +39,48 @@ class FTSMethod:
         self.string = []
         self.avgconfig = []
         self.string_io = []
-        self.avgconfig_io = []
         if self.rank == 0:
-            self.string = torch.zeros(self.num_nodes, list(self.config_size)[0])
+            self.string = torch.zeros(self.num_nodes, self.config_size[0],self.config_size[1])
             for i in range(self.num_nodes):
                 self.string[i] = torch.lerp(initial_config,final_config,self.alpha[i])
                 if i > 0 and i < self.num_nodes-1:
-                    self.string_io.append(open("string_{}.txt".format(i),"w"))
-                    self.avgconfig_io.append(open("avgconfig_{}.txt".format(i),"w"))
+                    self.string_io.append(open("string_{}.xyz".format(i),"w"))
             #savenodal configurations and running average. 
             #Note that there's no need to compute ruinning averages on the two end nodes (because they don't move)
-            self.avgconfig = torch.zeros_like(self.string[1:-1])#num_nodes, list(self.config_size)[0]-2)
-            #Number of samples in the running average
-            self.nsamples = 0
-        if self.world != self.num_nodes-2:
-            raise RuntimeError('Number of processes have to match number of nodal points in the string (minus the endpoints)!')
+            self.avgconfig = torch.zeros_like(self.string[1:-1])
+        #The weights constraining hyperplanes
+        self.weights = torch.stack((torch.zeros(self.config_size), torch.zeros(self.config_size)))
+        #The biases constraining hyperplanes
+        self.biases = torch.zeros(2)
         
     #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
     #It perofrms point-to-point communication with every sampler
-    def get_hyperplanes(self):
+    def compute_hyperplanes(self):
         if self.rank == 0:
             #String configurations are pre-processed to create new weights and biases
             #For the hyerplanes. Then they're sent to the other ranks
             for i in range(1,self.world):
-                weights = self.create_weights(i+1)
-                dist.send(weights, dst=i, tag=2*i)
-                bias = self.create_biases(i+1)
-                dist.send(bias, dst=i, tag=2*i+1)
-            return self.create_weights(1), self.create_biases(1)
+                self.compute_weights(i+1)
+                dist.send(self.weights, dst=i, tag=2*i)
+                self.compute_biases(i+1)
+                dist.send(self.biases, dst=i, tag=2*i+1)
+            self.compute_weights(1)
+            self.compute_biases(1)
         else:
-            weights = torch.stack((torch.zeros(self.config_size),torch.zeros(self.config_size)))
-            bias = torch.tensor([0.0,0.0])
-            dist.recv(weights, src = 0, tag = 2*self.rank )
-            dist.recv(bias, src = 0, tag = 2*self.rank+1 )
-            return weights, bias
-    
+            dist.recv(self.weights, src = 0, tag = 2*self.rank )
+            dist.recv(self.biases, src = 0, tag = 2*self.rank+1 )
     #Helper function for creating weights 
-    def create_weights(self,i):
+    def compute_weights(self,i):
         if self.rank == 0:
-            return torch.stack((0.5*(self.string[i]-self.string[i-1]), 0.5*(self.string[i+1]-self.string[i])))
+            self.weights = torch.stack((0.5*(self.string[i]-self.string[i-1]), 0.5*(self.string[i+1]-self.string[i])))
         else:
             raise RuntimeError('String is not stored in Rank-{}'.format(self.rank))
     #Helper function for creating biases
-    def create_biases(self,i):
+    def compute_biases(self,i):
         if self.rank == 0:
-            return torch.tensor([   torch.dot(0.5*(self.string[i]-self.string[i-1]),-0.5*(self.string[i]+self.string[i-1])),
-                                    torch.dot(0.5*(self.string[i+1]-self.string[i]),-0.5*(self.string[i+1]+self.string[i]))],
-                                    )
+            self.biases = torch.tensor([torch.sum(-0.5*(self.string[i]-self.string[i-1])*0.5*(self.string[i]+self.string[i-1])),
+                                        torch.sum(-0.5*(self.string[i+1]-self.string[i])*0.5*(self.string[i+1]+self.string[i]))],
+                                        )
         else:
             raise RuntimeError('String is not stored in Rank-{}'.format(self.rank))
 
@@ -84,13 +88,13 @@ class FTSMethod:
     def update(self):
         if self.rank == 0:
             ## (1) Regularized Gradient Descent
-            self.string[1:-1] = self.string[1:-1]-self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
-            
+            self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
+            #self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
             ## (2) Re-parameterization/Projection
             #print(self.string)
             #Compute the new intermedaite nodal variables
             #which doesn't obey equal arc-length parametrization
-            ell_k = torch.norm(self.string[1:]-self.string[:-1],dim=1)
+            ell_k = torch.norm(self.string[1:]-self.string[:-1],dim=(1,2))
             ellsum = torch.sum(ell_k)
             ell_k /= ellsum
             intm_alpha = torch.zeros_like(self.alpha)
@@ -101,16 +105,16 @@ class FTSMethod:
             index = torch.bucketize(intm_alpha,self.alpha)
             newstring = torch.zeros_like(self.string)
             for counter, item in enumerate(index[1:-1]):
-                #print(counter, item)
                 weight = (self.alpha[counter+1]-intm_alpha[item-1])/(intm_alpha[item]-intm_alpha[item-1])
                 newstring[counter+1] = torch.lerp(self.string[item-1],self.string[item],weight) 
             self.string[1:-1] = newstring[1:-1].detach().clone()
             del newstring
     #Will make MD simulation run on each window
     def run(self, n_steps):
+        self.compute_hyperplanes()
         #Do one step in MD simulation, constrained to pre-defined hyperplanes
-        self.sampler.run(n_steps,*self.get_hyperplanes())
-        config = self.sampler.get() 
+        self.sampler.runSimulation(n_steps,self.weights,self.biases)
+        config = self.sampler.getConfig() 
         
         #Accumulate running average
         #Note that cnofigurations must be sent back to the master rank and thus, 
@@ -126,17 +130,18 @@ class FTSMethod:
             self.nsamples += 1
         else:
             dist.send(config, dst=0)
-        #print(self.rank)
+        
         #Update the string
         self.update()
+        self.timestep += 1
     #Dump the string into a file
-    def dump(selfi,dumpstring=False):
-        if dumpstring:
+    def dump(self,dumpstring=False):
+        if dumpstring and self.rank == 0:
             for counter, io in enumerate(self.string_io):
-                for item in self.string[counter+1]:
-                    io.write("{} ".format(item))
+                io.write("{} \n".format(self.config_size[0]))
+                io.write("# step {} \n".format(self.timestep))
+                for i in range(self.config_size[0]):
+                    for j in range(self.config_size[1]):
+                        io.write("{} ".format(self.string[counter+1,i,j]))
                 io.write("\n")
-                for item in self.avgconfig[counter]:
-                    self.avgconfig_io[counter].write("{} ".format(item))
-                self.avgconfig_io[counter].write("\n")
-        self.sampler.dump()
+        self.sampler.dumpConfig()

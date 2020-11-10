@@ -9,7 +9,7 @@ set(_${COMPONENT_NAME}_sources
 ### Only if we need more. Importing Torch already gives us
 ### Access to many packages neeed
 #Find MPI
-#find_package(MPI REQUIRED)
+find_package(MPI REQUIRED)
 
 pybind11_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} NO_EXTRAS)
 target_link_libraries(_${COMPONENT_NAME} PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
