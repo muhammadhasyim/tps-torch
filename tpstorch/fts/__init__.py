@@ -7,9 +7,8 @@ from tpstorch.fts import _fts
 #An existing MD code with an FTS method Class. 
 class FTSSampler(_fts.FTSSampler):
     pass
-#Class for Handling Finite-Temperature String Method (non-CVs)
-#Maybe I'd rather have some methods inside a C++ class?
 
+#Class for Handling Finite-Temperature String Method (non-CVs)
 class FTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
         #The MD Ssimulation object, which interfaces with an MD Library
@@ -89,7 +88,6 @@ class FTSMethod:
         if self.rank == 0:
             ## (1) Regularized Gradient Descent
             self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
-            #self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
             ## (2) Re-parameterization/Projection
             #print(self.string)
             #Compute the new intermedaite nodal variables
@@ -130,6 +128,145 @@ class FTSMethod:
             self.nsamples += 1
         else:
             dist.send(config, dst=0)
+        
+        #Update the string
+        self.update()
+        self.timestep += 1
+    #Dump the string into a file
+    def dump(self,dumpstring=False):
+        if dumpstring and self.rank == 0:
+            for counter, io in enumerate(self.string_io):
+                io.write("{} \n".format(self.config_size[0]))
+                io.write("# step {} \n".format(self.timestep))
+                for i in range(self.config_size[0]):
+                    for j in range(self.config_size[1]):
+                        io.write("{} ".format(self.string[counter+1,i,j]))
+                io.write("\n")
+        self.sampler.dumpConfig()
+
+#FTSMethod but with different parallelization strategy
+class AltFTSMethod:
+    def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
+        #The MD Ssimulation object, which interfaces with an MD Library
+        self.sampler = sampler
+        #String timestep 
+        self.deltatau = deltatau
+        #Regularization strength
+        self.kappa = kappa*num_nodes*deltatau
+        #Number of nodes including endpoints
+        self.num_nodes = dist.get_world_size()
+        #Number of samples in the running average
+        self.nsamples = 0
+        #Timestep
+        self.timestep = 0
+        
+        #Saving the typical configuration size
+        #TO DO: assert the config_size as defining a rank-2 tensor. Or else abort the simulation!
+        self.config_size = initial_config.size()
+        
+        #Store rank and world size
+        self.rank = dist.get_rank()
+        self.world = dist.get_world_size()
+        
+        #Nodal parameters
+        self.alpha = self.rank/(self.world-1)
+        
+        self.string = torch.lerp(initial_config,final_config,dist.get_rank()/(dist.get_world_size()-1))
+        if self.rank > 0 and self.rank < self.world-1:
+            self.lstring = -torch.ones_like(self.string)
+            self.rstring = -torch.ones_like(self.string)
+        elif self.rank == 0:
+            self.rstring = -torch.ones_like(self.string)
+        elif self.rank == self.world-1:
+            self.lstring = -torch.ones_like(self.string)
+        self.avgconfig = torch.zeros_like(self.string)
+             
+        self.string_io = open("string_{}.xyz".format(dist.get_rank()+1),"w")
+        
+        #Initialize the weights and biases that constrain the MD simulation
+        if self.rank > 0 and self.rank < self.world-1:
+            self.weights = torch.stack((torch.zeros(self.config_size), torch.zeros(self.config_size)))
+            self.biases = torch.zeros(2)
+        else: 
+            self.weights = torch.stack((torch.zeros(self.config_size),))
+            #The biases constraining hyperplanes
+            self.biases = torch.zeros(1)
+    
+    def send_strings(self):
+        #Send to left and right neighbors
+        req = None
+        if dist.get_rank() < dist.get_world_size()-1:
+            dist.send(self.string,dst=dist.get_rank()+1,tag=2*dist.get_rank())
+            if dist.get_rank() >= 0:
+                dist.recv(self.rstring,src=dist.get_rank()+1,tag=2*(dist.get_rank()+1)+1)
+        if dist.get_rank() > 0:
+            if dist.get_rank() <= dist.get_world_size()-1:
+                dist.recv(self.lstring,src=dist.get_rank()-1,tag=2*(dist.get_rank()-1))
+            dist.send(self.string,dst=dist.get_rank()-1,tag=2*dist.get_rank()+1)
+    #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
+    #It perofrms point-to-point communication with every sampler
+    def compute_hyperplanes(self):
+        self.send_strings()
+        if self.rank > 0 and self.rank < self.world-1:
+            self.weights = torch.stack((0.5*(self.string-self.lstring), 0.5*(self.rstring-self.string)))
+            self.biases = torch.tensor([torch.sum(-0.5*(self.string-self.lstring)*0.5*(self.string+self.lstring)),
+                                        torch.sum(-0.5*(self.rstring-self.string)*0.5*(self.rstring+self.string))],
+                                        )
+        elif self.rank == 0:
+            self.weights = torch.stack((0.5*(self.rstring-self.string),))
+            self.biases = torch.tensor([torch.sum(-0.5*(self.rstring-self.string)*0.5*(self.rstring+self.string))])
+        elif self.rank == self.world-1:
+            self.weights = torch.stack((0.5*(self.string-self.lstring),))
+            self.biases = torch.tensor([torch.sum(-0.5*(self.string-self.lstring)*0.5*(self.lstring+self.string))])
+    #Update the string. Since it only exists in the first rank, only the first rank gets to do this
+    def update(self):
+        ## (1) Regularized Gradient Descent
+        if self.rank > 0 and self.rank < self.world-1:
+            self.string += -self.deltatau*(self.string-self.avgconfig)+self.kappa*(self.rstring-2*self.string+self.lstring)
+        
+        ## (2) Re-parameterization/Projection
+        ## Fist, Send the new intermediate string configurations
+        self.send_strings()
+        ## Next, compute the length segment of each string 
+        ell_k = torch.tensor(0.0)
+        if self.rank >= 0  and self.rank < self.world -1:
+            ell_k = torch.norm(self.rstring-self.string)
+
+        ## Next, compute the arc-length parametrization of the intermediate configuration
+        list_of_ell = []
+        for i in range(self.world):
+            list_of_ell.append(torch.tensor(0.0))
+        dist.all_gather(tensor_list=list_of_ell, tensor=ell_k)
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+        if self.rank > 0 and self.rank < self.world-1: 
+            del list_of_ell[-1]
+        
+            ellsum = sum(list_of_ell)
+            intm_alpha = torch.zeros(self.num_nodes)
+            for i in range(1,self.num_nodes):
+                intm_alpha[i] += list_of_ell[i-1].detach().clone()/ellsum+intm_alpha[i-1].detach().clone()
+            #Now interpolate back to the correct parametrization
+            index = torch.bucketize(self.alpha,intm_alpha)
+            weight = (self.alpha-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
+            if index == self.rank+1:
+                self.string = torch.lerp(self.string,self.rstring,weight) 
+            elif index == self.rank:
+                self.string = torch.lerp(self.lstring,self.string,weight) 
+            else:
+                raise RuntimeError("You need to interpolate from points beyond your nearest neighbors. \n \
+                                    Reduce your timestep for the string update!")
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+    #Will make MD simulation run on each window
+    def run(self, n_steps):
+        self.compute_hyperplanes()
+        
+        #Do one step in MD simulation, constrained to pre-defined hyperplanes
+        self.sampler.runSimulation(n_steps,self.weights,self.biases)
+        
+        #Compute the running average
+        self.avgconfig = (self.sampler.getConfig()+self.nsamples*self.avgconfig).detach().clone()/(self.nsamples+1)
         
         #Update the string
         self.update()
