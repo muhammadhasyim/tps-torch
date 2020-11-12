@@ -111,7 +111,7 @@ class FTSMethod:
     def run(self, n_steps):
         self.compute_hyperplanes()
         #Do one step in MD simulation, constrained to pre-defined hyperplanes
-        self.sampler.runSimulation(n_steps,self.weights,self.biases)
+        self.sampler.runSimulation(n_steps,self.weights[0],self.weights[1],self.biases[0],self.biases[1])
         config = self.sampler.getConfig() 
         
         #Accumulate running average
@@ -263,7 +263,13 @@ class AltFTSMethod:
         self.compute_hyperplanes()
         
         #Do one step in MD simulation, constrained to pre-defined hyperplanes
-        self.sampler.runSimulation(n_steps,self.weights,self.biases)
+        if self.rank > 0 and self.rank < self.world-1:
+            self.sampler.runSimulation(n_steps,self.weights[0],self.weights[1],self.biases[0],self.biases[1])
+        elif self.rank == 0:
+            self.sampler.runSimulation(n_steps,torch.zeros_like(self.weights[0]),self.weights[0],torch.zeros_like(self.biases[0]),self.biases[0])
+        elif self.rank == self.world-1:
+            self.sampler.runSimulation(n_steps,self.weights[0],torch.zeros_like(self.weights[0]),self.biases[0],torch.zeros_like(self.biases[0]))
+
         
         #Compute the running average
         self.avgconfig = (self.sampler.getConfig()+self.nsamples*self.avgconfig).detach().clone()/(self.nsamples+1)

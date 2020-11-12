@@ -5,18 +5,19 @@
 
 namespace py = pybind11;
 
+
 class PyFTSSampler : public FTSSampler
 {
     public:
         using FTSSampler::FTSSampler;
         //Default constructor creates 3x3 identity matrix
-        void runSimulation(int nsteps, const torch::Tensor& weights, const torch::Tensor& biases) override 
+        virtual void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias) override
         {
         PYBIND11_OVERRIDE_PURE(
             void, /* Return type */
             FTSSampler,      /* Parent class */
             runSimulation,          /* Name of function in C++ (must match Python name) */
-            nsteps, weights,biases      /* Argument(s) */
+            nsteps, left_weight, right_weight, left_bias, right_bias      /* Argument(s) */
             );
         };
         torch::Tensor getConfig() override
@@ -50,7 +51,7 @@ void export_FTSSampler(py::module& m)
     ;
 };
 
-PYBIND11_MODULE(_fts, m)
+PYBIND11_MODULE(/*name of module*/ _fts, /*variable name*/ m)
 {
     export_FTSSampler(m);
 }

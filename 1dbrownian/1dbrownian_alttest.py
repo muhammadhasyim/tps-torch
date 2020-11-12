@@ -14,17 +14,17 @@ class BrownianParticle(fts.FTSSampler):
         self.sigma = np.sqrt(2*D*dt)
         self.qt = initial.detach().clone()
         self.qt_io = open("bp_{}.txt".format(dist.get_rank()+1),"w")
-    def runSimulation(self, nsteps, weights, biases):
+    def runSimulation(self, nsteps, left_weight, right_weight, left_bias, right_bias):
         for i in range(nsteps):
             q0 = self.qt-4*self.qt*(-1+self.qt**2)*self.dt+torch.normal(torch.tensor([[0.0]]), self.sigma)
             if dist.get_rank() == 0:
-                if (torch.sum(q0*weights[0])+biases[0]).item() < 0:
+                if (torch.sum(q0*right_weight)+right_bias).item() < 0:
                     self.qt = q0.detach().clone()
             elif dist.get_rank() == dist.get_world_size()-1:
-                if (torch.sum(q0*weights[0])+biases[0]).item() > 0:
+                if (torch.sum(q0*left_weight)+left_bias).item() > 0:
                     self.qt = q0.detach().clone()
             else:
-                if (torch.sum(q0*weights[0])+biases[0]).item() > 0 and (torch.sum(q0*weights[1])+biases[1]).item() < 0:
+                if (torch.sum(q0*left_weight)+left_bias).item() > 0 and (torch.sum(q0*right_weight)+right_bias).item() < 0:
                     self.qt = q0.detach().clone()
     def getConfig(self):
         return self.qt.detach().clone()
@@ -50,7 +50,7 @@ end = torch.tensor([[1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 alphas = torch.linspace(0.0,1,dist.get_world_size()+2)[1:-1]
-bp_simulator = BrownianParticle(dt=0.001,D=0.1, initial=initializer(alphas[dist.get_rank()]))
+bp_simulator = BrownianParticle(dt=0.001,D=1.0, initial=initializer(alphas[dist.get_rank()]))
 
 fts_method = CustomFTSMethod(sampler=bp_simulator,initial_config=start,final_config=end,num_nodes=dist.get_world_size()+2,deltatau=0.01,kappa=0.01)
 

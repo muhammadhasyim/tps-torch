@@ -10,8 +10,9 @@ class FTSSampler
         //Default constructor creates 3x3 identity matrix
         FTSSampler(){};
         virtual ~FTSSampler(){};
-        virtual void runSimulation(int nsteps, const torch::Tensor& weights, const torch::Tensor& biases)
+        virtual void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
         {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
             //Might try and raise an error if this base method gets called instead
         };
@@ -21,6 +22,7 @@ class FTSSampler
         };
         virtual void dumpConfig()
         {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
             //Do nothing for nowi
             //Might try and raise an error if this base method gets called instead
         };
