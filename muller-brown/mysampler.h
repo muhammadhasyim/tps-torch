@@ -16,7 +16,7 @@ class MySampler : public FTSSampler
             system->GetParams(param_file);
         };
         ~MySampler(){}; 
-        void runSimulation(int nsteps, const torch::Tensor& weights, const torch::Tensor& biases)
+        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
         {
             system->Simulate(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
