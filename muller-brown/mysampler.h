@@ -18,6 +18,30 @@ class MySampler : public FTSSampler
         ~MySampler(){}; 
         void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
         {
+            //cout << "Torch lsize " << left_weight.sizes() << " " << left_weight.sizes()[0] << " " << left_weight.sizes()[1] << endl;
+            //cout << "Torch rsize " << right_weight.sizes() << " " << right_weight.sizes()[0] << " " << right_weight.sizes()[1] << endl;
+            vector<long int> lsizes{left_weight.sizes()[0], left_weight.sizes()[1]};
+            vector<long int> rsizes{right_weight.sizes()[0], right_weight.sizes()[1]};
+            vector<float> lweight(left_weight.data_ptr<float>(), left_weight.data_ptr<float>()+left_weight.numel());
+            vector<float> rweight(right_weight.data_ptr<float>(), right_weight.data_ptr<float>()+right_weight.numel());
+            long* lbias = left_bias.data_ptr<long>();
+            long* rbias = right_bias.data_ptr<long>();
+            /*
+            vector<float> lbias(left_bias.data_ptr<float>(), left_bias.data_ptr<float>()+left_bias.numel());
+            vector<float> rbias(right_bias.data_ptr<float>(), right_bias.data_ptr<float>()+right_bias.numel());
+            */
+            cout << "lVector " << lweight << endl;
+            cout << "rVector " << rweight << endl;
+            cout << "lVector " << *lbias << endl;
+            cout << "rVector " << *rbias << endl;
+            system->lweight = lweight;
+            system->rweight = rweight;
+            /*
+            system->lbias = lbias;
+            system->rbias = rbias;
+            */
+            system->lsizes = lsizes;
+            system->rsizes = rsizes;
             system->Simulate(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };

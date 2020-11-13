@@ -75,6 +75,13 @@ class MullerBrown {
         double * phi_storage;
         double2 * state_storage;
         string config = "config.xyz";
+        // Torch variables
+        vector<long int> lsizes{0,0};
+        vector<long int> rsizes{0,0};
+        vector<float> lweight;
+        vector<float> rweight;
+        vector<float> lbias{0.0};
+        vector<float> rbias{0.0};
 };
 
 #endif
