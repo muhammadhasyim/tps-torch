@@ -105,6 +105,35 @@ void MullerBrown::MCStep() {
     steps_tested++;
 }
 
+void MullerBrown::MCStepBias() {
+    double2 state_trial;
+    state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
+    state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
+    double phi_ = Energy(state_trial); 
+    double phi_diff = phi_-phi;
+    // Check to see if it satisfies constraints
+    double lcheck = lweight[0]*state_trial.x+lweight[1]*state_trial.y+lbias[0];
+    double rcheck = rweight[0]*state_trial.x+rweight[1]*state_trial.y+rbias[0];
+    bool check = (lcheck >= 0) && (rcheck <= 0);
+    if((phi_diff < 0) && check) {
+        // accept
+        state.x = state_trial.x;
+        state.y = state_trial.y;
+        phi = phi_;
+    }
+    else if((generator.d() < exp(-phi_diff/temp)) && check) {
+        // still accept, just a little more work
+        state.x = state_trial.x;
+        state.y = state_trial.y;
+        phi = phi_;
+    }
+    else {
+        // reject
+        steps_rejected++;
+    }
+    steps_tested++;
+}
+
 void MullerBrown::Simulate(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
@@ -114,6 +143,29 @@ void MullerBrown::Simulate(int steps) {
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStep();
+        if(i%check_time==0) {
+            cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
+        }
+        if(i%storage_time==0) {
+            phi_storage[i/storage_time] = phi;            
+            state_storage[i/storage_time].x = state.x;
+            state_storage[i/storage_time].y = state.y;
+        }
+        if(i%frame_time==0) {
+            DumpXYZ(config_file);
+        }
+    }
+}
+
+void MullerBrown::SimulateBias(int steps) {
+    steps_tested = 0;
+    steps_rejected = 0;
+    ofstream config_file;
+    config_file.precision(10);
+    config_file.open(config, std::ios_base::app);
+    for(int i=0; i<steps; i++) {
+        generator = Saru(seed_base, count_step++); 
+        MCStepBias();
         if(i%check_time==0) {
             cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
         }

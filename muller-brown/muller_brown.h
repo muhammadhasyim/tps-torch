@@ -31,8 +31,12 @@ class MullerBrown {
         double Energy(double2);
         // Perform Monte Carlo step
         void MCStep();
+        // Perform Monte Carlo step with bias
+        void MCStepBias();
         // Run simulation
         void Simulate(int);
+        // Run simulation with bias
+        void SimulateBias(int);
         // Dump state in XYZ format
         void DumpXYZ(ofstream&);
         // Dump phi_storage 
@@ -82,6 +86,16 @@ class MullerBrown {
         float* rweight;
         long* lbias;
         long* rbias;
+        /* Interface for the lweight and rweight is the following 
+        for(int i=0; i<lsizes[0]; i++) {
+            for(int j=0; j<lsizes[1]; j++) {
+                lweight[i*lsizes[1]+j];
+            }
+        }
+        Some applications we can just use directly
+        but for multiparticle systems this will come in handy
+        Naturally lsizes[0] should be num_particles, lsizes[1] should be dimension
+        */
 };
 
 #endif
