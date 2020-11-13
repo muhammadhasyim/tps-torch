@@ -16,6 +16,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tpstorch/extern/pybind11)
 include(CompilerFlagsSetup.cmake)
 include(GetTorchPath.cmake)
 find_package(Torch REQUIRED)
+find_library(TORCH_PYTHON_LIBRARY torch_python PATHS "${TORCH_INSTALL_PREFIX}/lib")
+message(STATUS "Found Torch Python Library: ${TORCH_PYTHON_LIBRARY}")
 
 # plugins must be built as shared libraries
 if (ENABLE_STATIC)
@@ -32,3 +34,11 @@ add_subdirectory(${PROJECT_NAME})
 
 #copy setup.py do I need it?
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py ${CMAKE_CURRENT_BINARY_DIR}/setup.py COPYONLY)
+
+set(cmake_scripts 
+    GetTorchPath.cmake
+    )
+
+foreach(file ${cmake_scripts})
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/${file} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}/CMake)
+endforeach()

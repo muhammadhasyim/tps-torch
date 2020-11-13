@@ -13,6 +13,8 @@ using namespace std;
 
 MullerBrown::MullerBrown() {
     // Constructor, currently does nothing
+    state.x = 0;
+    state.y = 0;
 }
 
 MullerBrown::~MullerBrown() {
