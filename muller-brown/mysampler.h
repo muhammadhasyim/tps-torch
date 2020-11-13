@@ -16,17 +16,22 @@ class MySampler : public FTSSampler
             system->GetParams(param_file);
         };
         ~MySampler(){}; 
-        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
+        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias, const torch::Tensor& state)
         {
+            // Initialize state
+            float* state_sys = state.data_ptr<float>();
+            system->state.x = double(state_sys[0]);
+            system->state.y = double(state_sys[1]);
+            // Pass bias variables to simulation using pointers
             long int lsizes[2] = {left_weight.sizes()[0], left_weight.sizes()[1]};
             long int rsizes[2] = {right_weight.sizes()[0], right_weight.sizes()[1]};
             system->lweight = left_weight.data_ptr<float>();
             system->rweight = right_weight.data_ptr<float>();
-            system->lbias = left_bias.data_ptr<long>();
-            system->rbias = right_bias.data_ptr<long>();
+            system->lbias = left_bias.data_ptr<float>();
+            system->rbias = right_bias.data_ptr<float>();
             system->lsizes = lsizes;
             system->rsizes = rsizes;
-            system->Simulate(nsteps);
+            system->SimulateBias(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
         torch::Tensor getConfig()

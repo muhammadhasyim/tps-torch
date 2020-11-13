@@ -84,8 +84,8 @@ class MullerBrown {
         long int* rsizes;
         float* lweight;
         float* rweight;
-        long* lbias;
-        long* rbias;
+        float* lbias;
+        float* rbias;
         /* Interface for the lweight and rweight is the following 
         for(int i=0; i<lsizes[0]; i++) {
             for(int j=0; j<lsizes[1]; j++) {
