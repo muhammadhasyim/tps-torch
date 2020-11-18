@@ -29,7 +29,7 @@ MullerBrown::~MullerBrown() {
     delete[] state_storage;
 }
 
-void MullerBrown::GetParams(string name) {
+void MullerBrown::GetParams(string name, int rank) {
     ifstream input;
     input.open(name);
     if(input.fail()) {
@@ -38,12 +38,12 @@ void MullerBrown::GetParams(string name) {
     else {
         char buffer;
         string line;
-        cout << "Param file detected. Changing values." << endl;
+        //cout << "Param file detected. Changing values." << endl;
         input >> line >> temp;
-        cout << "temp is now " << temp << endl;
+        //cout << "temp is now " << temp << endl;
         getline(input, line);
         input >> line >> count;
-        cout << "Count is now " << count << endl;
+        //cout << "Count is now " << count << endl;
         a_const = new double[count];
         a_param = new double[count];
         b_param = new double[count];
@@ -52,21 +52,24 @@ void MullerBrown::GetParams(string name) {
         y_param = new double[count];
         for(int i=0; i<count; i++) {
             input >> line >> a_const[i] >> a_param[i] >> b_param[i] >> c_param[i] >> x_param[i] >> y_param[i];
-            cout << i << " A_ " << a_const[i] << " a_ " << a_param[i] << " b_ " << b_param[i] << " c_ " << c_param[i] << " x_ " << x_param[i] << " y_ " << y_param[i] << endl;
+            //cout << i << " A_ " << a_const[i] << " a_ " << a_param[i] << " b_ " << b_param[i] << " c_ " << c_param[i] << " x_ " << x_param[i] << " y_ " << y_param[i] << endl;
             getline(input, line);
         }
         input >> line >> lambda;
-        cout << "lambda is now " << lambda << endl;
+        //cout << "lambda is now " << lambda << endl;
         getline(input, line);
         input >> line >> cycles >> storage_time;
-        cout << "Cycles " << cycles << " storage_time " << storage_time << endl;
+        //cout << "Cycles " << cycles << " storage_time " << storage_time << endl;
         getline(input, line);
         phi_storage = new double[cycles/storage_time];
         state_storage = new double2[cycles/storage_time];
         input >> line >> seed_base >> count_step >> frame_time >> check_time;
-        cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
+        //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
+        getline(input, line);
         generator = Saru(seed_base, count_step); 
     }
+    // also modify config path
+    config_file.open("config_"+to_string(rank)+".xyz", std::ios_base::app);
 }
 
 
@@ -137,9 +140,9 @@ void MullerBrown::MCStepBias() {
 void MullerBrown::Simulate(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
-    ofstream config_file;
-    config_file.precision(10);
-    config_file.open(config, std::ios_base::app);
+    ofstream config_file_2;
+    config_file_2.precision(10);
+    config_file_2.open(config, std::ios_base::app);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStep();
@@ -152,30 +155,26 @@ void MullerBrown::Simulate(int steps) {
             state_storage[i/storage_time].y = state.y;
         }
         if(i%frame_time==0) {
-            DumpXYZ(config_file);
+            DumpXYZ(config_file_2);
         }
     }
 }
 
-void MullerBrown::SimulateBias(int steps) {
+void MullerBrown::SimulateBias(int steps, int dump=0) {
     steps_tested = 0;
     steps_rejected = 0;
-    ofstream config_file;
-    config_file.precision(10);
-    config_file.open(config, std::ios_base::app);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStepBias();
-        if(i%check_time==0) {
-            cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
-        }
-        if(i%storage_time==0) {
-            phi_storage[i/storage_time] = phi;            
-            state_storage[i/storage_time].x = state.x;
-            state_storage[i/storage_time].y = state.y;
-        }
-        if(i%frame_time==0) {
-            DumpXYZ(config_file);
+        if(dump==1){
+            if(i%check_time==0) {
+                cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
+            }
+            if(i%storage_time==0) {
+                phi_storage[i/storage_time] = phi;            
+                state_storage[i/storage_time].x = state.x;
+                state_storage[i/storage_time].y = state.y;
+            }
         }
     }
 }
@@ -188,6 +187,21 @@ void MullerBrown::DumpXYZ(ofstream& myfile) {
     myfile << 1 << endl;
     myfile << "# step " << count_step << endl;
     myfile << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
+}
+
+void MullerBrown::DumpXYZBias(int dump=0) {
+    // turns off synchronization of C++ streams
+    ios_base::sync_with_stdio(false);
+    // Turns off flushing of out before in
+    cin.tie(NULL);
+    config_file << 1 << endl;
+    config_file << "# step " << count_step << " ";
+    if(dump==1) {
+        // Dump weights and biases
+        config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias << " ";
+        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias << "\n";
+    }
+    config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }
 
 void MullerBrown::DumpPhi() {

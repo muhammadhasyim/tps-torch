@@ -24,7 +24,7 @@ class MullerBrown {
         // Default destructor
         ~MullerBrown();
         // Input parameters
-        void GetParams(string);
+        void GetParams(string, int);
         // Input parameters when not using an input file
         void GetParams();
         // Get energy
@@ -39,6 +39,8 @@ class MullerBrown {
         void SimulateBias(int);
         // Dump state in XYZ format
         void DumpXYZ(ofstream&);
+        // Dump state in XYZ format with bias
+        void DumpXYZBias(int);
         // Dump phi_storage 
         void DumpPhi();
         // Dump state_storage
@@ -79,6 +81,8 @@ class MullerBrown {
         double * phi_storage;
         double2 * state_storage;
         string config = "config.xyz";
+        ofstream config_file;
+        config_file.precision(10);
         // Torch variables
         long int* lsizes;
         long int* rsizes;
