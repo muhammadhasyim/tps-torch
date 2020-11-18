@@ -11,7 +11,7 @@ class FTSSampler(_fts.FTSSampler):
 #Class for Handling Finite-Temperature String Method (non-CVs)
 class FTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
-        #The MD Ssimulation object, which interfaces with an MD Library
+        #The MD Simulation object, which interfaces with an MD Library
         self.sampler = sampler
         #String timestep 
         self.deltatau = deltatau
@@ -52,8 +52,8 @@ class FTSMethod:
         #The biases constraining hyperplanes
         self.biases = torch.zeros(2)
         
-    #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
-    #It perofrms point-to-point communication with every sampler
+    #Sends the weights and biases of the hyperplanes used to restrict the MD simulation
+    #It performs point-to-point communication with every sampler
     def compute_hyperplanes(self):
         if self.rank == 0:
             #String configurations are pre-processed to create new weights and biases
@@ -90,7 +90,7 @@ class FTSMethod:
             self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
             ## (2) Re-parameterization/Projection
             #print(self.string)
-            #Compute the new intermedaite nodal variables
+            #Compute the new intermediate nodal variables
             #which doesn't obey equal arc-length parametrization
             ell_k = torch.norm(self.string[1:]-self.string[:-1],dim=(1,2))
             ellsum = torch.sum(ell_k)
@@ -98,8 +98,8 @@ class FTSMethod:
             intm_alpha = torch.zeros_like(self.alpha)
             for i in range(1,self.num_nodes):
                 intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
-            #Noe interpolate back to the correct parametrization
-            #TO DO: Figure out how to aboid unneccarry copy, i.e., newstring copy
+            #Now interpolate back to the correct parametrization
+            #TO DO: Figure out how to avoid unnecessary copy, i.e., newstring copy
             index = torch.bucketize(intm_alpha,self.alpha)
             newstring = torch.zeros_like(self.string)
             for counter, item in enumerate(index[1:-1]):
@@ -115,8 +115,8 @@ class FTSMethod:
         config = self.sampler.getConfig() 
         
         #Accumulate running average
-        #Note that cnofigurations must be sent back to the master rank and thus, 
-        #it perofrms point-to-point communication with every sampler
+        #Note that configurations must be sent back to the master rank and thus, 
+        #it performs point-to-point communication with every sampler
         #TO DO: Try to not accumulate running average and use the more conventional 
         #Stochastic gradient descent
         if self.rank == 0:
@@ -147,7 +147,7 @@ class FTSMethod:
 #FTSMethod but with different parallelization strategy
 class AltFTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
-        #The MD Ssimulation object, which interfaces with an MD Library
+        #The MD Simulation object, which interfaces with an MD Library
         self.sampler = sampler
         #String timestep 
         self.deltatau = deltatau
@@ -203,8 +203,8 @@ class AltFTSMethod:
             if dist.get_rank() <= dist.get_world_size()-1:
                 dist.recv(self.lstring,src=dist.get_rank()-1,tag=2*(dist.get_rank()-1))
             dist.send(self.string,dst=dist.get_rank()-1,tag=2*dist.get_rank()+1)
-    #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
-    #It perofrms point-to-point communication with every sampler
+    #Sends the weights and biases of the hyperplanes used to restrict the MD simulation
+    #It performs point-to-point communication with every sampler
     def compute_hyperplanes(self):
         self.send_strings()
         if self.rank > 0 and self.rank < self.world-1:
