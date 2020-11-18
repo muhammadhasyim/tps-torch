@@ -36,7 +36,7 @@ class MullerBrown {
         // Run simulation
         void Simulate(int);
         // Run simulation with bias
-        void SimulateBias(int);
+        void SimulateBias(int, int);
         // Dump state in XYZ format
         void DumpXYZ(ofstream&);
         // Dump state in XYZ format with bias
@@ -82,7 +82,6 @@ class MullerBrown {
         double2 * state_storage;
         string config = "config.xyz";
         ofstream config_file;
-        config_file.precision(10);
         // Torch variables
         long int* lsizes;
         long int* rsizes;

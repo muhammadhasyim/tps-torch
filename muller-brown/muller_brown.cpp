@@ -248,7 +248,7 @@ void MullerBrown::DumpStates() {
 
 int main(int argc, char* argv[]) {
     MullerBrown system;
-    system.GetParams("param");
+    system.GetParams("param", 0);
     system.Simulate(system.cycles);
     system.DumpPhi();
     system.DumpStates();
