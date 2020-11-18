@@ -9,19 +9,19 @@
 class MySampler : public FTSSampler
 {
     public:
-        MySampler(std::string param_file)
+        MySampler(std::string param_file, const torch::Tensor& state)
             : system(new MullerBrown())
         {
             //Load parameters during construction
             system->GetParams(param_file);
-        };
-        ~MySampler(){}; 
-        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias, const torch::Tensor& state)
-        {
             // Initialize state
             float* state_sys = state.data_ptr<float>();
             system->state.x = double(state_sys[0]);
             system->state.y = double(state_sys[1]);
+        };
+        ~MySampler(){}; 
+        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
+        {
             // Pass bias variables to simulation using pointers
             long int lsizes[2] = {left_weight.sizes()[0], left_weight.sizes()[1]};
             long int rsizes[2] = {right_weight.sizes()[0], right_weight.sizes()[1]};
