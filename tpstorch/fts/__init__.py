@@ -45,7 +45,7 @@ class FTSMethod:
                 if i > 0 and i < self.num_nodes-1:
                     self.string_io.append(open("string_{}.xyz".format(i),"w"))
             #savenodal configurations and running average. 
-            #Note that there's no need to compute ruinning averages on the two end nodes (because they don't move)
+            #Note that there's no need to compute running averages on the two end nodes (because they don't move)
             self.avgconfig = torch.zeros_like(self.string[1:-1])
         #The weights constraining hyperplanes
         self.weights = torch.stack((torch.zeros(self.config_size), torch.zeros(self.config_size)))

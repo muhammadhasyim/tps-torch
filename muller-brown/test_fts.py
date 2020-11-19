@@ -21,13 +21,15 @@ def initializer(s,start,end):
     return (1-s)*start+s*end
 alphas = torch.linspace(0.0,1,dist.get_world_size()+2)[1:-1]
 mb_sim = mb.MySampler("param_test",initializer(alphas[rank],start,end), rank, 0)
+# if(rank==0):
+    # mb_sim = mb.MySampler("param_test",initializer(alphas[rank],start,end), rank, 1)
 if(rank==0):
     print(alphas)
     print(alphas.size)
 
 # Now do FTS method
-fts_method = CustomFTSMethod(sampler=mb_sim,initial_config=start,final_config=end,num_nodes=dist.get_world_size()+2,deltatau=0.01,kappa=0.01)
-for i in range(1000):
+fts_method = CustomFTSMethod(sampler=mb_sim,initial_config=start,final_config=end,num_nodes=dist.get_world_size()+2,deltatau=0.1,kappa=0.1)
+for i in range(100000):
     fts_method.run(1)
     if(i%50==0):
         fts_method.dump(1)
