@@ -31,3 +31,4 @@ add_custom_target(copy_${COMPONENT_NAME} ALL DEPENDS ${files})
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/extern/pybind11 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/extern/)
 
 add_subdirectory(fts)
+add_subdirectory(ml)
