@@ -69,7 +69,7 @@ void MullerBrown::GetParams(string name, int rank) {
         generator = Saru(seed_base, count_step); 
     }
     // also modify config path
-    config_file.open("config_"+to_string(rank)+".xyz", std::ios_base::app);
+    config_file.open("string_"+to_string(rank)+".xyz", std::ios_base::app);
 }
 
 
@@ -160,13 +160,13 @@ void MullerBrown::Simulate(int steps) {
     }
 }
 
-void MullerBrown::SimulateBias(int steps, int dump=0) {
+void MullerBrown::SimulateBias(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStepBias();
-        if(dump==1){
+        if(dump_sim==1){
             if(i%check_time==0) {
                 cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
             }
@@ -198,8 +198,8 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     config_file << "# step " << count_step << " ";
     if(dump==1) {
         // Dump weights and biases
-        config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias << " ";
-        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias << "\n";
+        config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias[0] << " ";
+        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias[0] << "\n";
     }
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }

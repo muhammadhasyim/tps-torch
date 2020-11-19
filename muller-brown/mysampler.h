@@ -9,7 +9,7 @@
 class MySampler : public FTSSampler
 {
     public:
-        MySampler(std::string param_file, const torch::Tensor& state, int rank)
+        MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump)
             : system(new MullerBrown())
         {
             //Load parameters during construction
@@ -18,9 +18,10 @@ class MySampler : public FTSSampler
             float* state_sys = state.data_ptr<float>();
             system->state.x = double(state_sys[0]);
             system->state.y = double(state_sys[1]);
+            system->dump_sim = dump;
         };
         ~MySampler(){}; 
-        void runSimulation(int nsteps, int dump, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
+        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
         {
             // Pass bias variables to simulation using pointers
             long int lsizes[2] = {left_weight.sizes()[0], left_weight.sizes()[1]};
@@ -31,7 +32,7 @@ class MySampler : public FTSSampler
             system->rbias = right_bias.data_ptr<float>();
             system->lsizes = lsizes;
             system->rsizes = rsizes;
-            system->SimulateBias(nsteps, dump);
+            system->SimulateBias(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
         torch::Tensor getConfig()

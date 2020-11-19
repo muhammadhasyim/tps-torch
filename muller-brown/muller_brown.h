@@ -36,7 +36,7 @@ class MullerBrown {
         // Run simulation
         void Simulate(int);
         // Run simulation with bias
-        void SimulateBias(int, int);
+        void SimulateBias(int);
         // Dump state in XYZ format
         void DumpXYZ(ofstream&);
         // Dump state in XYZ format with bias
@@ -78,6 +78,7 @@ class MullerBrown {
         int storage_time = 1;
         int frame_time = 10;
         int check_time = 1000;
+        int dump_sim = 0;
         double * phi_storage;
         double2 * state_storage;
         string config = "config.xyz";
