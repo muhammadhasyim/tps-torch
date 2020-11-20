@@ -1,63 +1,29 @@
 import torch
-from torch.optim import Optimizer
+from torch.optim import Optimizer, SGD
 from torch.optim.optimizer import required
 import torch.distributed as dist
 from pymbar import timeseries
 
+#A helper function to compute the un-normalized reweighting factors
+def computeFlk(k,meanweight,meannewweight):
+    with torch.no_grad():
+        empty = []
+        for l in range(dist.get_world_size()):
+            if l > k:
+                empty.append(torch.prod(meanweight[k:l]))
+            elif l < k:
+                empty.append(torch.prod(meannewweight[l:k]))
+            else:
+                empty.append(torch.ones_like(torch.prod(meanweight)))
+        return torch.tensor(empty).flatten()
+
 class UnweightedSGD(Optimizer):
-    r"""Implements stochastic gradient descent (optionally with momentum).
+    r"""Implements stochastic gradient descent (optionally with momentum). 
     
-    This implementation has an additional step which is reweighting the computed 
-    gradients through free-energy estimation techniques. Currently only implementng
-    exponential averaging (EXP) because it is cheap. 
+    This implementation has an additional step which is to collect gradients computed in different 
+    MPI processes and just average them. This is useful when you're running many unbiased simulations  
     
-    The rest of the comment is copied from torch.optim.SGD
-
-    Nesterov momentum is based on the formula from
-    `On the importance of initialization and momentum in deep learning`__.
-
-    Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float): learning rate
-        momentum (float, optional): momentum factor (default: 0)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        dampening (float, optional): dampening for momentum (default: 0)
-        nesterov (bool, optional): enables Nesterov momentum (default: False)
-
-    Example:
-        >>> optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
-        >>> optimizer.zero_grad()
-        >>> loss_fn(model(input), target).backward()
-        >>> optimizer.step()
-
-    __ http://www.cs.toronto.edu/%7Ehinton/absps/momentum.pdf
-
-    .. note::
-        The implementation of SGD with Momentum/Nesterov subtly differs from
-        Sutskever et. al. and implementations in some other frameworks.
-
-        Considering the specific case of Momentum, the update can be written as
-
-        .. math::
-            \begin{aligned}
-                v_{t+1} & = \mu * v_{t} + g_{t+1}, \\
-                p_{t+1} & = p_{t} - \text{lr} * v_{t+1},
-            \end{aligned}
-
-        where :math:`p`, :math:`g`, :math:`v` and :math:`\mu` denote the 
-        parameters, gradient, velocity, and momentum respectively.
-
-        This is in contrast to Sutskever et. al. and
-        other frameworks which employ an update of the form
-
-        .. math::
-            \begin{aligned}
-                v_{t+1} & = \mu * v_{t} + \text{lr} * g_{t+1}, \\
-                p_{t+1} & = p_{t} - v_{t+1}.
-            \end{aligned}
-
-        The Nesterov version is analogously modified.
+    Any more detailed implementation should be consulted on torch.optim.SGD
     """
 
     def __init__(self, params, sampler=required, lr=required, momentum=0, dampening=0,
@@ -75,7 +41,6 @@ class UnweightedSGD(Optimizer):
             raise ValueError("Nesterov momentum requires a momentum and zero dampening")
         super(UnweightedSGD, self).__init__(params, defaults)
        
-
     def __setstate__(self, state):
         super(UnweightedSGD, self).__setstate__(state)
         for group in self.param_groups:
@@ -108,7 +73,8 @@ class UnweightedSGD(Optimizer):
                 #p.grad should be the average of grad(x)/c(x) over the minibatch
                 d_p = p.grad
 
-                #All reduce the gradients
+                #This is the new part from the original SGD implementation
+                #We just do an all reduce on the gradients
                 dist.all_reduce(d_p)
                 d_p.div_(dist.get_world_size())
                 
@@ -130,6 +96,8 @@ class UnweightedSGD(Optimizer):
 
         return loss
 
+
+
 class EXPReweightSGD(Optimizer):
     r"""Implements stochastic gradient descent (optionally with momentum).
     
@@ -137,53 +105,6 @@ class EXPReweightSGD(Optimizer):
     gradients through free-energy estimation techniques. Currently only implementng
     exponential averaging (EXP) because it is cheap. 
     
-    The rest of the comment is copied from torch.optim.SGD
-
-    Nesterov momentum is based on the formula from
-    `On the importance of initialization and momentum in deep learning`__.
-
-    Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float): learning rate
-        momentum (float, optional): momentum factor (default: 0)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        dampening (float, optional): dampening for momentum (default: 0)
-        nesterov (bool, optional): enables Nesterov momentum (default: False)
-
-    Example:
-        >>> optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
-        >>> optimizer.zero_grad()
-        >>> loss_fn(model(input), target).backward()
-        >>> optimizer.step()
-
-    __ http://www.cs.toronto.edu/%7Ehinton/absps/momentum.pdf
-
-    .. note::
-        The implementation of SGD with Momentum/Nesterov subtly differs from
-        Sutskever et. al. and implementations in some other frameworks.
-
-        Considering the specific case of Momentum, the update can be written as
-
-        .. math::
-            \begin{aligned}
-                v_{t+1} & = \mu * v_{t} + g_{t+1}, \\
-                p_{t+1} & = p_{t} - \text{lr} * v_{t+1},
-            \end{aligned}
-
-        where :math:`p`, :math:`g`, :math:`v` and :math:`\mu` denote the 
-        parameters, gradient, velocity, and momentum respectively.
-
-        This is in contrast to Sutskever et. al. and
-        other frameworks which employ an update of the form
-
-        .. math::
-            \begin{aligned}
-                v_{t+1} & = \mu * v_{t} + \text{lr} * g_{t+1}, \\
-                p_{t+1} & = p_{t} - v_{t+1}.
-            \end{aligned}
-
-        The Nesterov version is analogously modified.
     """
 
     def __init__(self, params, sampler=required, lr=required, momentum=0, dampening=0,
@@ -210,7 +131,7 @@ class EXPReweightSGD(Optimizer):
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, closure=None, weightfactors=required, invnormconstants=required):
+    def step(self, closure=None, backward_weightfactors=required, forward_weightfactors=required, reciprocal_normconstants=required):
         """Performs a single optimization step.
 
         Arguments:
@@ -226,10 +147,23 @@ class EXPReweightSGD(Optimizer):
         self.reweight = [torch.zeros(1) for i in range(dist.get_world_size())]
         container = self.reweight.copy()
         dist.all_gather(container,torch.mean(weightfactors))
+        container = torch.tensor(container[:-1])
+
+        newcontainer = self.reweight.copy()
+        dist.all_gather(newcontainer,torch.mean(newweightfactors))
+        newcontainer = torch.tensor(newcontainer[1:])
+        
+        #self.reweight = computeFlk(0,container,newcontainer)
+        #random index
+        random_index = torch.randint(low=0,high=dist.get_world_size(),size=(1,))#.item() 
+        dist.broadcast(random_index, src=0)
+        self.reweight = computeFlk(random_index.item(),container,newcontainer)
+        #for i in range(1,dist.get_world_size()):
+        #    self.reweight = (computeFlk(i,container,newcontainer)+i*self.reweight)/(i+1)
         #Move up the last element, which is equal to one, to the first element
-        container = container[-1:]+container[:-1]
+        #container = container[-1:]+container[:-1]
         #Computing the reweighting factors, z_l in  our notation
-        self.reweight = torch.cumprod(torch.tensor(container),dim=0)
+        #self.reweight = torch.cumprod(torch.tensor(container),dim=0)
         self.reweight.div_(torch.sum(self.reweight))  #normalize
         
         #Use it first to compute the mean inverse normalizing constant

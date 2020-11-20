@@ -20,12 +20,37 @@ class PyMLSamplerEXP : public MLSamplerEXP
             committor_val      /* Argument(s) */
             );
         };
-        void updateTorchConfig() override
+        torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEXP,      /* Parent class */
+                computeW,          /* Name of function in C++ (must match Python name) */
+                committor_val, q
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        torch::Tensor computeC(const double& committor_val) override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEXP,      /* Parent class */
+                computeC,          /* Name of function in C++ (must match Python name) */
+                committor_val
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        void computeFactors(const double& committor_val)
         {
             PYBIND11_OVERRIDE(
                 void, /* Return type */
                 MLSamplerEXP,      /* Parent class */
-                updateTorchConfig,          /* Name of function in C++ (must match Python name) */
+                computeFactors,          /* Name of function in C++ (must match Python name) */
+                committor_val
                 );
             //Do nothing for nowi
             //Might try and raise an error if this base method gets called instead
@@ -35,12 +60,18 @@ class PyMLSamplerEXP : public MLSamplerEXP
 void export_MLSamplerEXP(py::module& m)
 {
     py::class_<MLSamplerEXP, PyMLSamplerEXP, std::shared_ptr<MLSamplerEXP> > (m, "MLSamplerEXP", py::dynamic_attr())
-    .def(py::init< torch::Tensor>())
+    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
     .def("step", &MLSamplerEXP::step)
-    .def("updateTorchConfig", &MLSamplerEXP::updateTorchConfig)
+    .def("computeW", &MLSamplerEXP::computeW)
+    .def("computeC", &MLSamplerEXP::computeC)
+    .def("computeFactors", &MLSamplerEXP::computeFactors)
     .def_readwrite("torch_config", &MLSamplerEXP::torch_config)
-    .def_readwrite("weightfactor", &MLSamplerEXP::weightfactor)
-    .def_readwrite("invnormconstant", &MLSamplerEXP::invnormconstant)
+    .def_readwrite("forward_weightfactor", &MLSamplerEXP::forward_weightfactor)
+    .def_readwrite("backward_weightfactor", &MLSamplerEXP::backward_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &MLSamplerEXP::reciprocal_normconstant)
+    .def_readwrite("qvals", &MLSamplerEXP::qvals)
+    .def_readwrite("invkT", &MLSamplerEXP::invkT)
+    .def_readwrite("kappa", &MLSamplerEXP::kappa)
     ;
 };
 
