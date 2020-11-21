@@ -18,6 +18,7 @@ class FTSSampler
         };
         virtual torch::Tensor getConfig()
         {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
             return torch::eye(3);
         };
         virtual void dumpConfig()
