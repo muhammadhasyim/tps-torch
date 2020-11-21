@@ -55,8 +55,8 @@ class EXPReweightSimulation(IterableDataset):
                 yield ( self.sampler.torch_config, #The configuration of the system 
                         torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0], #The gradient of commmittor with respect to input
                         self.sampler.reciprocal_normconstant, #Inverse of normalizing constant, denoted as 1/c(x) in the manuscript
-                        self.sampler.forward_weightfactor, #this is the un-normalized weighting factor, this should compute w_{l+1}/w_{l} where l is the l-th window
-                        self.sampler.backward_weightfactor, #this is the un-normalized weighting factor, this should compute w_{l-1}/w_{l} where l is the l-th window
+                        self.sampler.fwd_weightfactor, #this is the un-normalized weighting factor, this should compute w_{l+1}/w_{l} where l is the l-th window
+                        self.sampler.bwrd_weightfactor, #this is the un-normalized weighting factor, this should compute w_{l-1}/w_{l} where l is the l-th window
                         ) 
                  
     def __iter__(self):

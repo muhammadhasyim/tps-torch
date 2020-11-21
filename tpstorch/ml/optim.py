@@ -5,16 +5,16 @@ import torch.distributed as dist
 from pymbar import timeseries
 
 #A helper function to compute the un-normalized reweighting factors
-def computeFlk(k,meanweight,meannewweight):
+def computeFlk(k,fwd_meanwgtfactor,bwrd_meanwgtfactor):
     with torch.no_grad():
         empty = []
         for l in range(dist.get_world_size()):
             if l > k:
-                empty.append(torch.prod(meanweight[k:l]))
+                empty.append(torch.prod(fwd_meanwgtfactor[k:l]))
             elif l < k:
-                empty.append(torch.prod(meannewweight[l:k]))
+                empty.append(torch.prod(bwrd_meanwgtfactor[l:k]))
             else:
-                empty.append(torch.ones_like(torch.prod(meanweight)))
+                empty.append(torch.tensor(1.0))
         return torch.tensor(empty).flatten()
 
 class UnweightedSGD(Optimizer):
@@ -131,7 +131,7 @@ class EXPReweightSGD(Optimizer):
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, closure=None, backward_weightfactors=required, forward_weightfactors=required, reciprocal_normconstants=required):
+    def step(self, closure=None, fwd_weightfactors=required, bwrd_weightfactors=required, reciprocal_normconstants=required):
         """Performs a single optimization step.
 
         Arguments:
@@ -143,36 +143,32 @@ class EXPReweightSGD(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        #Process the reweighting factors here
+        #Average out the batch of weighting factors (unique to each process)
+        #and distribute them across all processes.
+        #TO DO: combine weight factors into a single array so that we have one contigous memory to distribute
         self.reweight = [torch.zeros(1) for i in range(dist.get_world_size())]
-        container = self.reweight.copy()
-        dist.all_gather(container,torch.mean(weightfactors))
-        container = torch.tensor(container[:-1])
+        fwd_meanwgtfactor = self.reweight.copy()
+        dist.all_gather(fwd_meanwgtfactor,torch.mean(fwd_weightfactors))
+        fwd_meanwgtfactor = torch.tensor(fwd_meanwgtfactor[:-1])
 
-        newcontainer = self.reweight.copy()
-        dist.all_gather(newcontainer,torch.mean(newweightfactors))
-        newcontainer = torch.tensor(newcontainer[1:])
+        bwrd_meanwgtfactor = self.reweight.copy()
+        dist.all_gather(bwrd_meanwgtfactor,torch.mean(bwrd_weightfactors))
+        bwrd_meanwgtfactor = torch.tensor(bwrd_meanwgtfactor[1:])
         
-        #self.reweight = computeFlk(0,container,newcontainer)
-        #random index
-        random_index = torch.randint(low=0,high=dist.get_world_size(),size=(1,))#.item() 
+        #Randomly select a window as a free energy reference and broadcast that index across all processes
+        random_index = torch.randint(low=0,high=dist.get_world_size(),size=(1,))
         dist.broadcast(random_index, src=0)
-        self.reweight = computeFlk(random_index.item(),container,newcontainer)
-        #for i in range(1,dist.get_world_size()):
-        #    self.reweight = (computeFlk(i,container,newcontainer)+i*self.reweight)/(i+1)
-        #Move up the last element, which is equal to one, to the first element
-        #container = container[-1:]+container[:-1]
+        
         #Computing the reweighting factors, z_l in  our notation
-        #self.reweight = torch.cumprod(torch.tensor(container),dim=0)
+        self.reweight = computeFlk(random_index.item(),fwd_meanwgtfactor,bwrd_meanwgtfactor)#newcontainer)
         self.reweight.div_(torch.sum(self.reweight))  #normalize
         
         #Use it first to compute the mean inverse normalizing constant
-        mean_invc = torch.mean(invnormconstants)
-        mean_invc.mul_(self.reweight[dist.get_rank()])
+        mean_recipnormconst = torch.mean(reciprocal_normconstants)#invnormconstants)
+        mean_recipnormconst.mul_(self.reweight[dist.get_rank()])
 
         #All reduce the mean invnormalizing constant
-        dist.all_reduce(mean_invc)
-
+        dist.all_reduce(mean_recipnormconst)
         for group in self.param_groups:
             weight_decay = group['weight_decay']
             momentum = group['momentum']
@@ -194,7 +190,7 @@ class EXPReweightSGD(Optimizer):
                 dist.all_reduce(d_p)
                 
                 #Divide in-place by the mean inverse normalizing constant
-                d_p.div_(mean_invc)
+                d_p.div_(mean_recipnormconst)
                 
                 if weight_decay != 0:
                     d_p = d_p.add(p, alpha=weight_decay)
@@ -212,4 +208,4 @@ class EXPReweightSGD(Optimizer):
 
                 p.add_(d_p, alpha=-group['lr'])
 
-        return mean_invc, self.reweight
+        return mean_recipnormconst, self.reweight

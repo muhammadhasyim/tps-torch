@@ -14,10 +14,10 @@ class MLSamplerEXP
         torch::Tensor torch_config;
         
         //Weight factor , to be used for reweighting averages 
-        torch::Tensor forward_weightfactor;
+        torch::Tensor fwd_weightfactor;
         
         //Weight factor, to be used for reweighting averages
-        torch::Tensor backward_weightfactor;
+        torch::Tensor bwrd_weightfactor;
         
         //Reciprocal of the normalization constant 1/c(x) used for reweighting samples
         torch::Tensor reciprocal_normconstant;
@@ -33,7 +33,7 @@ class MLSamplerEXP
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerEXP(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            :   torch_config(config), forward_weightfactor(torch::zeros(1)), backward_weightfactor(torch::zeros(1)), reciprocal_normconstant(torch::zeros(1)),
+            :   torch_config(config), fwd_weightfactor(torch::zeros(1)), bwrd_weightfactor(torch::zeros(1)), reciprocal_normconstant(torch::zeros(1)),
                 qvals(torch::linspace(0,1,mpi_group->getSize())), invkT(0), kappa(0), m_mpi_group(mpi_group)
         {
             //Turn on the requires grad by default
@@ -66,12 +66,12 @@ class MLSamplerEXP
             if (m_mpi_group->getRank() < m_mpi_group->getSize()-1)
             {
                 dW = computeW(committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
-                forward_weightfactor = torch::exp(-invkT*dW);
+                fwd_weightfactor = torch::exp(-invkT*dW);
             }
             if (m_mpi_group->getRank() > 0)
             {
                 dW = computeW(committor_val,qvals[m_mpi_group->getRank()-1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
-                backward_weightfactor = torch::exp(-invkT*dW);
+                bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
     protected:
