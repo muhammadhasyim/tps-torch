@@ -33,7 +33,7 @@ class MLSamplerEXP
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerEXP(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            :   torch_config(config), fwd_weightfactor(torch::zeros(1)), bwrd_weightfactor(torch::zeros(1)), reciprocal_normconstant(torch::zeros(1)),
+            :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
                 qvals(torch::linspace(0,1,mpi_group->getSize())), invkT(0), kappa(0), m_mpi_group(mpi_group)
         {
             //Turn on the requires grad by default
