@@ -24,6 +24,7 @@ build/*
 build*/
 test-py/
 test-py/*
+test-py*
 
 # Python egg metadata, regenerated from source files by setuptools.
 /*.egg

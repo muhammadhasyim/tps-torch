@@ -198,7 +198,7 @@ class EXPReweightSGD(Optimizer):
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, closure=None, fwd_weightfactors=required, bwrd_weightfactors=required, reciprocal_normconstants=required,epoch=1):
+    def step(self, closure=None, fwd_weightfactors=required, bwrd_weightfactors=required, reciprocal_normconstants=required):
         """Performs a single optimization step.
 
         Arguments:

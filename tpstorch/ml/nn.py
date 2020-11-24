@@ -16,13 +16,13 @@ class CommittorLossEXP(_Loss):
 
     def __init__(self, size_average=None, reduce=None):
         super(CommittorLossEXP, self).__init__(size_average, reduce, 'none')
-        self.loss = torch.zeros(1)
+        self.main_loss = torch.zeros(1)
         self.bc_loss = torch.zeros(1)
     def compute_bc(self, committor, config):
         return NotImplementedError
     def compute_loss(self, gradients, invnormconstants):
         return 0.5*torch.sum(torch.mean(gradients*gradients*invnormconstants.view(-1,1),dim=0));
     def forward(self, gradients, committor, config, invnormconstants):
-        self.loss = self.compute_loss(gradients, invnormconstants)
+        self.main_loss = self.compute_loss(gradients, invnormconstants)
         self.bc_loss = self.compute_bc(committor, config, invnormconstants)
-        return self.loss+self.bc_loss
+        return self.main_loss+self.bc_loss
