@@ -5,7 +5,7 @@
 
 namespace py = pybind11;
 
-
+//Trampoline class for proper inheritance behavior in the Python side
 class PyMLSamplerEXP : public MLSamplerEXP
 {
     public:
@@ -56,6 +56,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
             //Might try and raise an error if this base method gets called instead
         };
 };
+
 
 void export_MLSamplerEXP(py::module& m)
 {

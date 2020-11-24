@@ -13,10 +13,12 @@ class MLSamplerEXP
         //This is necessarry for layout compatibility with neural net!
         torch::Tensor torch_config;
         
-        //Weight factor , to be used for reweighting averages 
+        //Forward ratio of umbrella potential boltzmann factors w_{l+1}/w_{l}
+        //, to be used for obtaining free energy differences through exp averaging. 
         torch::Tensor fwd_weightfactor;
         
-        //Weight factor, to be used for reweighting averages
+        //Backwards ratio of umbrella potential boltzmann factors w_{l-1}/w_{l}
+        //, to be used for obtaining free energy differences through exp averaging. 
         torch::Tensor bwrd_weightfactor;
         
         //Reciprocal of the normalization constant 1/c(x) used for reweighting samples
@@ -53,21 +55,28 @@ class MLSamplerEXP
             torch::NoGradGuard no_grad_guard;
             return 0.5*kappa*(committor_val-q)*(committor_val-q);
         }
+
+        //Helper function for computing c(x)
         virtual torch::Tensor computeC(const double& committor_val)
         {
             torch::NoGradGuard no_grad_guard;
             return torch::sum(torch::exp(-invkT*computeW(committor_val, qvals))); 
         }
+
+        // A routine for computing two umbrella window weights. One is w_{l+1}(x)/w_l(x) and the other is w_{l-1}(x)/w_l(x)
         virtual void computeFactors(const double& committor_val)
         {
             torch::NoGradGuard no_grad_guard;
             reciprocal_normconstant = 1/computeC(committor_val);
             torch::Tensor dW;
+
+            //For w_{1+1}(x)/w_{l}(x), only compute if your rank is zero to second-to-last
             if (m_mpi_group->getRank() < m_mpi_group->getSize()-1)
             {
                 dW = computeW(committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
                 fwd_weightfactor = torch::exp(-invkT*dW);
             }
+            //For w_{1-1}(x)/w_{l}(x), only compute if your rank is one to last
             if (m_mpi_group->getRank() > 0)
             {
                 dW = computeW(committor_val,qvals[m_mpi_group->getRank()-1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
@@ -75,6 +84,7 @@ class MLSamplerEXP
             }
         }
     protected:
+        //A pointer for the MPI process group used in the current simulation
         std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
 };
 
