@@ -16,6 +16,12 @@ class FTSSampler
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
             //Might try and raise an error if this base method gets called instead
         };
+        virtual void runSimulationVor(int nsteps, int rank, const torch::Tensor& voronoi_cell)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
+            //Might try and raise an error if this base method gets called instead
+        };
         virtual torch::Tensor getConfig()
         {
             return torch::eye(3);

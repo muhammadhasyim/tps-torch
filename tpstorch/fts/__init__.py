@@ -408,7 +408,7 @@ class FTSMethodVor:
     #Will make MD simulation run on each window
     def run(self, n_steps):
         #Do one step in MD simulation, constrained to Voronoi cells
-        self.sampler.runSimulation(n_steps,self.rank,self.voronoi)
+        self.sampler.runSimulationVor(n_steps,self.rank,self.voronoi)
         
         #Compute the running average
         self.avgconfig = (self.sampler.getConfig()+self.nsamples*self.avgconfig).detach().clone()/(self.nsamples+1)

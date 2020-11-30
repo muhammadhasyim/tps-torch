@@ -35,6 +35,16 @@ class MySampler : public FTSSampler
             system->SimulateBias(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
+        void runSimulationVor(int nsteps, int rank, const torch::Tensor& voronoi_cell)
+        {
+            // Pass bias variables to simulation using pointers
+            long int vor_sizes[2] = {voronoi_cell.sizes()[0], voronoi_cell.sizes()[1]};
+            system->rank = rank;
+            system->voronoi_cells = voronoi_cell.data_ptr<float>();
+            system->vor_sizes = vor_sizes;
+            system->SimulateVor(nsteps);
+            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
+        };
         torch::Tensor getConfig()
         {
             torch::Tensor config = torch::ones(2);
