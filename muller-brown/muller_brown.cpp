@@ -83,13 +83,13 @@ double MullerBrown::Energy(double2 state_) {
     return phi_;
 }
 
-double VoronoiDist(double2 state_test, float * vor_cell) {
+double MullerBrown::VoronoiDist(double2 state_test, float * vor_cell) {
     double dist_x = pow(state_test.x-vor_cell[0],2);
     double dist_y = pow(state_test.y-vor_cell[1],2);
     return sqrt(dist_x+dist_y);
 }
 
-int VoronoiCheck(double2 state_) {
+int MullerBrown::VoronoiCheck(double2 state_) {
     int min_index = 0;
     double min_distance = VoronoiDist(state_, voronoi_cells);
     for(int i=1; i<vor_sizes[0]; i++) {
@@ -102,7 +102,7 @@ int VoronoiCheck(double2 state_) {
     return min_index;  
 }
 
-void VoronoiSet() {
+void MullerBrown::VoronoiSet() {
     state.x = voronoi_cells[rank*vor_sizes[1]];
     state.y = voronoi_cells[rank*vor_sizes[1]+1];
 }
@@ -283,6 +283,16 @@ void MullerBrown::DumpXYZBias(int dump=0) {
         config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias[0] << " ";
         config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias[0] << "\n";
     }
+    config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
+}
+
+void MullerBrown::DumpXYZVor() {
+    // turns off synchronization of C++ streams
+    ios_base::sync_with_stdio(false);
+    // Turns off flushing of out before in
+    cin.tie(NULL);
+    config_file << 1 << endl;
+    config_file << "# step " << count_step << " ";
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }
 

@@ -60,6 +60,12 @@ class MySampler : public FTSSampler
             //You can add whatever you want here Clay!
             system->DumpXYZBias(dump);
         };
+        void dumpConfigVor(int dump)
+        {
+            //Do nothing for now
+            //You can add whatever you want here Clay!
+            system->DumpXYZVor();
+        };
     private:
         //The MullerBrown simulator 
         //I did shared_ptr so that it can clean up itself during destruction

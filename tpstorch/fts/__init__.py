@@ -309,6 +309,7 @@ class FTSMethodVor:
         #Saving the typical configuration size
         #TO DO: assert the config_size as defining a rank-2 tensor. Or else abort the simulation!
         self.config_size = initial_config.size()
+        self.config_size_abs = self.config_size[0]*self.config_size[1]
         
         #Store rank and world size
         self.rank = dist.get_rank()
@@ -323,13 +324,13 @@ class FTSMethodVor:
             # Kinda confusing notation, but essentially to make this tridiagonal order is
             # we go through each direction in order
             # zeros
-            self.matrix = torch.zeros(self.config_size*self.num_nodes, self.config_size*self.num_nodes, dtype=torch.float)
+            self.matrix = torch.zeros(self.config_size_abs*self.num_nodes, self.config_size_abs*self.num_nodes, dtype=torch.float)
             # first, last row
-            for i in range(self.config_size):
+            for i in range(self.config_size_abs):
                 self.matrix[i*self.num_nodes,i*self.num_nodes] = 1.0
-                self.matrix[(i+1)*self.num_nodes-1,(i+1)*self.num_nodes] = 1.0
+                self.matrix[(i+1)*self.num_nodes-1,(i+1)*self.num_nodes-1] = 1.0
             # rest of rows
-            for i in range(self.config_size):
+            for i in range(self.config_size_abs):
                 for j in range(1,self.num_nodes-1):
                     self.matrix[i*self.num_nodes+j,i*self.num_nodes+j] = 1.0+2.0*self.kappa
                     self.matrix[i*self.num_nodes+j,i*self.num_nodes+j-1] = -1.0*self.kappa
@@ -347,7 +348,8 @@ class FTSMethodVor:
         
         #Initialize the Voronoi cell  
         # Could maybe make more efficient by looking at only the closest nodes
-        self.voronoi = torch.empty(self.world, self.config_size, dtype=torch.float)
+        #self.voronoi = torch.empty(self.world, self.config_size_abs, dtype=torch.float)
+        self.voronoi = [torch.empty(self.config_size[0], self.config_size[1], dtype=torch.float) for i in range(self.world)] 
     
     def send_strings(self):
         # Use an all-gather to communicate all strings to each other
@@ -403,11 +405,12 @@ class FTSMethodVor:
         #Not ideal, but will leave that to code implementation as there are a 
         #bunch of tricky things I don't want to assume here (namely periodic
         #boundary condition)
-        self.send_strings()
 
     #Will make MD simulation run on each window
     def run(self, n_steps):
         #Do one step in MD simulation, constrained to Voronoi cells
+        self.send_strings()
+        print(self.voronoi)
         self.sampler.runSimulationVor(n_steps,self.rank,self.voronoi)
         
         #Compute the running average

@@ -10,6 +10,7 @@ void export_MySampler(py::module& m)
     .def("runSimulationVor", &MySampler::runSimulationVor)
     .def("getConfig", &MySampler::getConfig)
     .def("dumpConfig", &MySampler::dumpConfig)
+    .def("dumpConfigVor", &MySampler::dumpConfigVor)
     ;
 };
 

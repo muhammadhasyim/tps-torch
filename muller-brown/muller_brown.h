@@ -51,6 +51,8 @@ class MullerBrown {
         void DumpXYZ(ofstream&);
         // Dump state in XYZ format with bias
         void DumpXYZBias(int);
+        // Dump state in XYZ format for Voronoi 
+        void DumpXYZVor();
         // Dump phi_storage 
         void DumpPhi();
         // Dump state_storage
