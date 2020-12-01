@@ -105,6 +105,7 @@ int MullerBrown::VoronoiCheck(double2 state_) {
 void MullerBrown::VoronoiSet() {
     state.x = voronoi_cells[rank*vor_sizes[2]];
     state.y = voronoi_cells[rank*vor_sizes[2]+1];
+    phi = Energy(state);
 }
 
 void MullerBrown::MCStep() {
@@ -162,6 +163,9 @@ void MullerBrown::MCStepBias() {
 }
 
 void MullerBrown::MCStepVor() {
+    ofstream config_dump;
+    config_dump.precision(10);
+    config_dump.open("out_"+to_string(rank), std::ios_base::app);
     double2 state_trial;
     state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
     state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
@@ -190,6 +194,9 @@ void MullerBrown::MCStepVor() {
         // reject
         steps_rejected++;
     }
+    if(count_step%50==0) {
+        config_dump << "States " << state.x << " " << state.y << " " << state_trial.x << " " << state_trial.y << " phi_diff " << phi_diff << " check " << check << " " << rank << "\n";
+    }
     steps_tested++;
 }
 
@@ -199,6 +206,7 @@ void MullerBrown::Simulate(int steps) {
     ofstream config_file_2;
     config_file_2.precision(10);
     config_file_2.open(config, std::ios_base::app);
+    phi = Energy(state);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStep();
@@ -219,6 +227,7 @@ void MullerBrown::Simulate(int steps) {
 void MullerBrown::SimulateBias(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
+    phi = Energy(state);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++); 
         MCStepBias();
@@ -238,6 +247,7 @@ void MullerBrown::SimulateBias(int steps) {
 void MullerBrown::SimulateVor(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
+    phi = Energy(state);
     // Check to see if initial config is within Voronoi cell is it supposed to be in
     // If not, change config to Voronoi cell
     // If outside (false), set
