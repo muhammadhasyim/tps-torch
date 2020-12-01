@@ -344,7 +344,7 @@ class FTSMethodVor:
         self.string = torch.lerp(initial_config,final_config,dist.get_rank()/(dist.get_world_size()-1))
         self.avgconfig = torch.zeros_like(self.string)
              
-        self.string_io = open("string_{}.xyz".format(dist.get_rank()+1),"w")
+        self.string_io = open("string_{}.xyz".format(dist.get_rank()),"w")
         
         #Initialize the Voronoi cell  
         # Could maybe make more efficient by looking at only the closest nodes
@@ -361,7 +361,7 @@ class FTSMethodVor:
         # Will use matrix solving in the near future, but for now use original update scheme
         # Will probably make it an option to use explicit or implicit scheme
         if self.rank > 0 and self.rank < self.world-1:
-            self.string += -self.deltatau*(self.string-self.avgconfig)+self.kappa*(self.voronoi[self.rank-1,:]-2*self.string+self.voronoi[self.rank+1,:])
+            self.string += -self.deltatau*(self.string-self.avgconfig)+self.kappa*(self.voronoi[self.rank-1]-2*self.string+self.voronoi[self.rank+1])
         elif self.rank == 0:
             self.string -= self.deltatau*(self.string-self.avgconfig)
         else:
@@ -373,7 +373,7 @@ class FTSMethodVor:
         ## Next, compute the length segment of each string 
         ell_k = torch.tensor(0.0)
         if self.rank >= 0  and self.rank < self.world -1:
-            ell_k = torch.norm(self.voronoi[self.rank+1,:]-self.string)
+            ell_k = torch.norm(self.voronoi[self.rank+1]-self.string)
 
         ## Next, compute the arc-length parametrization of the intermediate configuration
         list_of_ell = []
@@ -393,9 +393,9 @@ class FTSMethodVor:
             index = torch.bucketize(self.alpha,intm_alpha)
             weight = (self.alpha-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
             if index == self.rank+1:
-                self.string = torch.lerp(self.string,self.voronoi[self.rank+1,:],weight) 
+                self.string = torch.lerp(self.string,self.voronoi[self.rank+1],weight) 
             elif index == self.rank:
-                self.string = torch.lerp(self.voronoi[self.rank-1,:],self.string,weight) 
+                self.string = torch.lerp(self.voronoi[self.rank-1],self.string,weight) 
             else:
                 raise RuntimeError("You need to interpolate from points beyond your nearest neighbors. \n \
                                     Reduce your timestep for the string update!")
@@ -410,8 +410,8 @@ class FTSMethodVor:
     def run(self, n_steps):
         #Do one step in MD simulation, constrained to Voronoi cells
         self.send_strings()
-        print(self.voronoi)
-        self.sampler.runSimulationVor(n_steps,self.rank,self.voronoi)
+        voronoi_list = torch.stack(self.voronoi, dim=0)
+        self.sampler.runSimulationVor(n_steps,self.rank,voronoi_list)
         
         #Compute the running average
         self.avgconfig = (self.sampler.getConfig()+self.nsamples*self.avgconfig).detach().clone()/(self.nsamples+1)

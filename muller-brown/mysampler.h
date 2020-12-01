@@ -38,7 +38,7 @@ class MySampler : public FTSSampler
         void runSimulationVor(int nsteps, int rank, const torch::Tensor& voronoi_cell)
         {
             // Pass bias variables to simulation using pointers
-            long int vor_sizes[2] = {voronoi_cell.sizes()[0], voronoi_cell.sizes()[1]};
+            long int vor_sizes[3] = {voronoi_cell.sizes()[0], voronoi_cell.sizes()[1], voronoi_cell.sizes()[2]};
             system->rank = rank;
             system->voronoi_cells = voronoi_cell.data_ptr<float>();
             system->vor_sizes = vor_sizes;
@@ -60,7 +60,7 @@ class MySampler : public FTSSampler
             //You can add whatever you want here Clay!
             system->DumpXYZBias(dump);
         };
-        void dumpConfigVor(int dump)
+        void dumpConfigVor()
         {
             //Do nothing for now
             //You can add whatever you want here Clay!

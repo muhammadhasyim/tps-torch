@@ -93,7 +93,7 @@ int MullerBrown::VoronoiCheck(double2 state_) {
     int min_index = 0;
     double min_distance = VoronoiDist(state_, voronoi_cells);
     for(int i=1; i<vor_sizes[0]; i++) {
-        double distance = VoronoiDist(state_, voronoi_cells+i*vor_sizes[1]);
+        double distance = VoronoiDist(state_, voronoi_cells+i*vor_sizes[2]);
         if(distance < min_distance) {
             min_distance = distance;
             min_index = i;
@@ -103,8 +103,8 @@ int MullerBrown::VoronoiCheck(double2 state_) {
 }
 
 void MullerBrown::VoronoiSet() {
-    state.x = voronoi_cells[rank*vor_sizes[1]];
-    state.y = voronoi_cells[rank*vor_sizes[1]+1];
+    state.x = voronoi_cells[rank*vor_sizes[2]];
+    state.y = voronoi_cells[rank*vor_sizes[2]+1];
 }
 
 void MullerBrown::MCStep() {
@@ -281,8 +281,9 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     if(dump==1) {
         // Dump weights and biases
         config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias[0] << " ";
-        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias[0] << "\n";
+        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias[0];
     }
+    config_file << "\n";
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }
 
@@ -292,7 +293,7 @@ void MullerBrown::DumpXYZVor() {
     // Turns off flushing of out before in
     cin.tie(NULL);
     config_file << 1 << endl;
-    config_file << "# step " << count_step << " ";
+    config_file << "# step " << count_step << "\n";
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }
 
