@@ -9,8 +9,8 @@ rank = dist.get_rank()
 
 #Override FTS class and modify routines as needed
 class CustomFTSMethod(fts.FTSMethodVor):
-    def __init__(self,sampler,initial_config,final_config,num_nodes,deltatau,kappa):
-        super(CustomFTSMethod, self).__init__(sampler,initial_config,final_config,num_nodes,deltatau,kappa)
+    def __init__(self,sampler,initial_config,final_config,num_nodes,deltatau,kappa,update_rule):
+        super(CustomFTSMethod, self).__init__(sampler,initial_config,final_config,num_nodes,deltatau,kappa,update_rule)
     def dump(self):
         self.sampler.dumpConfigVor()
 
@@ -28,9 +28,9 @@ if(rank==0):
     print(alphas.size())
 
 # Now do FTS method
-fts_method = CustomFTSMethod(sampler=mb_sim,initial_config=start,final_config=end,num_nodes=dist.get_world_size(),deltatau=0.1,kappa=0.1)
+fts_method = CustomFTSMethod(sampler=mb_sim,initial_config=start,final_config=end,num_nodes=dist.get_world_size(),deltatau=0.1,kappa=0.1,update_rule=1)
 print(fts_method.string)
-for i in range(10000):
+for i in range(100000):
     fts_method.run(1)
     if(i%50==0):
         fts_method.dump()
