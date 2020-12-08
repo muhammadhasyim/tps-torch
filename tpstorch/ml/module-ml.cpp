@@ -11,15 +11,25 @@ class PyMLSamplerEXP : public MLSamplerEXP
     public:
         using MLSamplerEXP::MLSamplerEXP;
         //Default constructor creates 3x3 identity matrix
-        virtual void step(const double& committor_val) override
+        virtual void step(const double& committor_val, bool onlytst = false) override
         {
         PYBIND11_OVERRIDE_PURE(
             void, /* Return type */
             MLSamplerEXP,      /* Parent class */
             step,          /* Name of function in C++ (must match Python name) */
-            committor_val      /* Argument(s) */
+            committor_val, onlytst      /* Argument(s) */
             );
         };
+        
+        virtual void step_unbiased() override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEXP,      /* Parent class */
+            step_unbiased,          /* Name of function in C++ (must match Python name) */
+            );
+        };
+        
         torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
         {
             PYBIND11_OVERRIDE(
@@ -60,9 +70,11 @@ class PyMLSamplerEXP : public MLSamplerEXP
 
 void export_MLSamplerEXP(py::module& m)
 {
+    //Expose everything to the Python side!
     py::class_<MLSamplerEXP, PyMLSamplerEXP, std::shared_ptr<MLSamplerEXP> > (m, "MLSamplerEXP", py::dynamic_attr())
     .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
     .def("step", &MLSamplerEXP::step)
+    .def("step_unbiased", &MLSamplerEXP::step_unbiased)
     .def("computeW", &MLSamplerEXP::computeW)
     .def("computeC", &MLSamplerEXP::computeC)
     .def("computeFactors", &MLSamplerEXP::computeFactors)

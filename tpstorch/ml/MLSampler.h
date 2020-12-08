@@ -42,7 +42,15 @@ class MLSamplerEXP
             torch_config.requires_grad_();
         };
         virtual ~MLSamplerEXP(){};
-        virtual void step(const double& committor_val)
+        //Default time-stepper for doing the biased simulations 
+        virtual void step(const double& committor_val, bool onlytst = false)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        virtual void step_unbiased()
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
