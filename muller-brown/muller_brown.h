@@ -24,21 +24,35 @@ class MullerBrown {
         // Default destructor
         ~MullerBrown();
         // Input parameters
-        void GetParams(string);
+        void GetParams(string, int);
         // Input parameters when not using an input file
         void GetParams();
         // Get energy
         double Energy(double2);
+        // Get distances from state to Voronoi cell
+        double VoronoiDist(double2, float *);
+        // Do Voronoi cell check
+        int VoronoiCheck(double2);
+        // Change state if outside Voronoi cell
+        void VoronoiSet();
         // Perform Monte Carlo step
         void MCStep();
         // Perform Monte Carlo step with bias
         void MCStepBias();
+        // Perform Monte Carlo step with Voronoi
+        void MCStepVor();
         // Run simulation
         void Simulate(int);
         // Run simulation with bias
         void SimulateBias(int);
+        // Run simulation with Voronoi
+        void SimulateVor(int);
         // Dump state in XYZ format
         void DumpXYZ(ofstream&);
+        // Dump state in XYZ format with bias
+        void DumpXYZBias(int);
+        // Dump state in XYZ format for Voronoi 
+        void DumpXYZVor();
         // Dump phi_storage 
         void DumpPhi();
         // Dump state_storage
@@ -76,16 +90,23 @@ class MullerBrown {
         int storage_time = 1;
         int frame_time = 10;
         int check_time = 1000;
+        int dump_sim = 0;
         double * phi_storage;
         double2 * state_storage;
         string config = "config.xyz";
+        ofstream config_file;
         // Torch variables
+        // Hyperplane parameters
         long int* lsizes;
         long int* rsizes;
         float* lweight;
         float* rweight;
         float* lbias;
         float* rbias;
+        // Voronoi parameters
+        int rank = 0;
+        long int* vor_sizes; // by convention, first index is number of cells, second is number of parameters in a cell
+        float* voronoi_cells;
         /* Interface for the lweight and rweight is the following 
         for(int i=0; i<lsizes[0]; i++) {
             for(int j=0; j<lsizes[1]; j++) {

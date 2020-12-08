@@ -11,7 +11,7 @@ class FTSSampler(_fts.FTSSampler):
 #Class for Handling Finite-Temperature String Method (non-CVs)
 class FTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
-        #The MD Ssimulation object, which interfaces with an MD Library
+        #The MD Simulation object, which interfaces with an MD Library
         self.sampler = sampler
         #String timestep 
         self.deltatau = deltatau
@@ -45,15 +45,15 @@ class FTSMethod:
                 if i > 0 and i < self.num_nodes-1:
                     self.string_io.append(open("string_{}.xyz".format(i),"w"))
             #savenodal configurations and running average. 
-            #Note that there's no need to compute ruinning averages on the two end nodes (because they don't move)
+            #Note that there's no need to compute running averages on the two end nodes (because they don't move)
             self.avgconfig = torch.zeros_like(self.string[1:-1])
         #The weights constraining hyperplanes
         self.weights = torch.stack((torch.zeros(self.config_size), torch.zeros(self.config_size)))
         #The biases constraining hyperplanes
         self.biases = torch.zeros(2)
         
-    #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
-    #It perofrms point-to-point communication with every sampler
+    #Sends the weights and biases of the hyperplanes used to restrict the MD simulation
+    #It performs point-to-point communication with every sampler
     def compute_hyperplanes(self):
         if self.rank == 0:
             #String configurations are pre-processed to create new weights and biases
@@ -90,7 +90,7 @@ class FTSMethod:
             self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig)+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])
             ## (2) Re-parameterization/Projection
             #print(self.string)
-            #Compute the new intermedaite nodal variables
+            #Compute the new intermediate nodal variables
             #which doesn't obey equal arc-length parametrization
             ell_k = torch.norm(self.string[1:]-self.string[:-1],dim=(1,2))
             ellsum = torch.sum(ell_k)
@@ -98,8 +98,8 @@ class FTSMethod:
             intm_alpha = torch.zeros_like(self.alpha)
             for i in range(1,self.num_nodes):
                 intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
-            #Noe interpolate back to the correct parametrization
-            #TO DO: Figure out how to aboid unneccarry copy, i.e., newstring copy
+            #Now interpolate back to the correct parametrization
+            #TO DO: Figure out how to avoid unnecessary copy, i.e., newstring copy
             index = torch.bucketize(intm_alpha,self.alpha)
             newstring = torch.zeros_like(self.string)
             for counter, item in enumerate(index[1:-1]):
@@ -115,8 +115,8 @@ class FTSMethod:
         config = self.sampler.getConfig() 
         
         #Accumulate running average
-        #Note that cnofigurations must be sent back to the master rank and thus, 
-        #it perofrms point-to-point communication with every sampler
+        #Note that configurations must be sent back to the master rank and thus, 
+        #it performs point-to-point communication with every sampler
         #TO DO: Try to not accumulate running average and use the more conventional 
         #Stochastic gradient descent
         if self.rank == 0:
@@ -147,7 +147,7 @@ class FTSMethod:
 #FTSMethod but with different parallelization strategy
 class AltFTSMethod:
     def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa):
-        #The MD Ssimulation object, which interfaces with an MD Library
+        #The MD Simulation object, which interfaces with an MD Library
         self.sampler = sampler
         #String timestep 
         self.deltatau = deltatau
@@ -203,8 +203,8 @@ class AltFTSMethod:
             if dist.get_rank() <= dist.get_world_size()-1:
                 dist.recv(self.lstring,src=dist.get_rank()-1,tag=2*(dist.get_rank()-1))
             dist.send(self.string,dst=dist.get_rank()-1,tag=2*dist.get_rank()+1)
-    #Sends the weights and biases of the hyperplnaes used to restrict the MD simulation
-    #It perofrms point-to-point communication with every sampler
+    #Sends the weights and biases of the hyperplanes used to restrict the MD simulation
+    #It performs point-to-point communication with every sampler
     def compute_hyperplanes(self):
         self.send_strings()
         if self.rank > 0 and self.rank < self.world-1:
@@ -276,6 +276,209 @@ class AltFTSMethod:
         
         #Update the string
         self.update()
+        self.timestep += 1
+    #Dump the string into a file
+    def dump(self,dumpstring=False):
+        if dumpstring and self.rank == 0:
+            for counter, io in enumerate(self.string_io):
+                io.write("{} \n".format(self.config_size[0]))
+                io.write("# step {} \n".format(self.timestep))
+                for i in range(self.config_size[0]):
+                    for j in range(self.config_size[1]):
+                        io.write("{} ".format(self.string[counter+1,i,j]))
+                io.write("\n")
+        self.sampler.dumpConfig()
+
+#FTSMethod but matches that used in 2009 paper
+# A few things I liked to try here as well that I'll try to get with options, but bare for now
+class FTSMethodVor:
+    def __init__(self, sampler, initial_config, final_config, num_nodes, deltatau, kappa, update_rule):
+        #The MD Simulation object, which interfaces with an MD Library
+        self.sampler = sampler
+        #String timestep 
+        self.deltatau = deltatau
+        #Regularization strength
+        self.kappa = kappa*num_nodes*deltatau
+        #Number of nodes including endpoints
+        self.num_nodes = dist.get_world_size()
+        #Number of samples in the running average
+        self.nsamples = 0
+        #Timestep
+        self.timestep = 0
+        #Update rule
+        self.update_rule = update_rule
+        
+        #Saving the typical configuration size
+        #TO DO: assert the config_size as defining a rank-2 tensor. Or else abort the simulation!
+        self.config_size = initial_config.size()
+        self.config_size_abs = self.config_size[0]*self.config_size[1]
+        
+        #Store rank and world size
+        self.rank = dist.get_rank()
+        self.world = dist.get_world_size()
+
+        # Matrix used for inversing
+        # Construct only on rank 0
+        # Note that it always stays the same, so invert here and use at each iteration
+        # Kinda confusing notation, but essentially to make this tridiagonal order is
+        # we go through each direction in order
+        # zeros
+        self.matrix = torch.zeros(self.config_size_abs*self.num_nodes, self.config_size_abs*self.num_nodes, dtype=torch.float)
+        # first, last row
+        for i in range(self.config_size_abs):
+            self.matrix[i*self.num_nodes,i*self.num_nodes] = 1.0
+            self.matrix[(i+1)*self.num_nodes-1,(i+1)*self.num_nodes-1] = 1.0
+        # rest of rows
+        for i in range(self.config_size_abs):
+            for j in range(1,self.num_nodes-1):
+                self.matrix[i*self.num_nodes+j,i*self.num_nodes+j] = 1.0+2.0*self.kappa
+                self.matrix[i*self.num_nodes+j,i*self.num_nodes+j-1] = -1.0*self.kappa
+                self.matrix[i*self.num_nodes+j,i*self.num_nodes+j+1] = -1.0*self.kappa
+        # inverse
+        self.matrix_inverse = torch.inverse(self.matrix)
+        
+        #Nodal parameters
+        self.alpha = self.rank/(self.world-1)
+        
+        self.string = torch.lerp(initial_config,final_config,dist.get_rank()/(dist.get_world_size()-1))
+        self.avgconfig = torch.zeros_like(self.string)
+             
+        self.string_io = open("string_{}.xyz".format(dist.get_rank()),"w")
+        
+        #Initialize the Voronoi cell  
+        # Could maybe make more efficient by looking at only the closest nodes
+        #self.voronoi = torch.empty(self.world, self.config_size_abs, dtype=torch.float)
+        self.voronoi = [torch.empty(self.config_size[0], self.config_size[1], dtype=torch.float) for i in range(self.world)] 
+    
+    def send_strings(self):
+        # Use an all-gather to communicate all strings to each other
+        dist.all_gather(self.voronoi, self.string)
+        
+    #Update the string. Since it only exists in the first rank, only the first rank gets to do this
+    def update(self):
+        ## (1) Regularized Gradient Descent
+        # Will use matrix solving in the near future, but for now use original update scheme
+        # Will probably make it an option to use explicit or implicit scheme
+        if self.rank > 0 and self.rank < self.world-1:
+            self.string += -self.deltatau*(self.string-self.avgconfig)+self.kappa*(self.voronoi[self.rank-1]-2*self.string+self.voronoi[self.rank+1])
+        elif self.rank == 0:
+            self.string -= self.deltatau*(self.string-self.avgconfig)
+        else:
+            self.string -= self.deltatau*(self.string-self.avgconfig)
+        
+        ## (2) Re-parameterization/Projection
+        ## Fist, Send the new intermediate string configurations
+        self.send_strings()
+        ## Next, compute the length segment of each string 
+        ell_k = torch.tensor(0.0)
+        if self.rank >= 0  and self.rank < self.world -1:
+            ell_k = torch.norm(self.voronoi[self.rank+1]-self.string)
+
+        ## Next, compute the arc-length parametrization of the intermediate configuration
+        list_of_ell = []
+        for i in range(self.world):
+            list_of_ell.append(torch.tensor(0.0))
+        dist.all_gather(tensor_list=list_of_ell, tensor=ell_k)
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+        if self.rank > 0 and self.rank < self.world-1: 
+            del list_of_ell[-1]
+        
+            ellsum = sum(list_of_ell)
+            intm_alpha = torch.zeros(self.num_nodes)
+            for i in range(1,self.num_nodes):
+                intm_alpha[i] += list_of_ell[i-1].detach().clone()/ellsum+intm_alpha[i-1].detach().clone()
+            #Now interpolate back to the correct parametrization
+            index = torch.bucketize(self.alpha,intm_alpha)
+            weight = (self.alpha-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
+            if index == self.rank+1:
+                self.string = torch.lerp(self.string,self.voronoi[self.rank+1],weight) 
+            elif index == self.rank:
+                self.string = torch.lerp(self.voronoi[self.rank-1],self.string,weight) 
+            else:
+                raise RuntimeError("You need to interpolate from points beyond your nearest neighbors. \n \
+                                    Reduce your timestep for the string update!")
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+        #If not the case, set config equal to string center
+        #Not ideal, but will leave that to code implementation as there are a 
+        #bunch of tricky things I don't want to assume here (namely periodic
+        #boundary condition)
+
+    #Update the string. Since it only exists in the first rank, only the first rank gets to do this
+    def update_matrix(self):
+        #Matrix solving scheme
+        #Make forcing side, then invert and communicate back
+        #Doing some shuffling to make it compatible with the matrix
+        #Solving it on all processors, not good practice but it works
+        force = self.string-self.deltatau*(self.string-self.avgconfig)
+        forces = [torch.empty(self.config_size[0], self.config_size[1], dtype=torch.float) for i in range(self.world)] 
+        dist.all_gather(forces, force)
+        forces_solve = torch.empty(self.world*self.config_size[0]*self.config_size[1], dtype=torch.float)
+        forces_solve = torch.empty(self.world*self.config_size[0]*self.config_size[1], dtype=torch.float)
+        for i in range(self.config_size[1]):
+            for j in range(self.world):
+                for k in range(self.config_size[0]):
+                    forces_solve[k+j*self.config_size[0]+i*self.config_size[0]*self.world] = forces[j][k,i]
+        new_string = torch.matmul(self.matrix_inverse, forces_solve)
+        for i in range(self.config_size[1]):
+            for k in range(self.config_size[0]):
+                self.string[k,i] = new_string[k+self.rank*self.config_size[0]+i*self.config_size[0]*self.world]
+        
+        ## (2) Re-parameterization/Projection
+        ## Fist, Send the new intermediate string configurations
+        self.send_strings()
+        ## Next, compute the length segment of each string 
+        ell_k = torch.tensor(0.0)
+        if self.rank >= 0  and self.rank < self.world -1:
+            ell_k = torch.norm(self.voronoi[self.rank+1]-self.string)
+
+        ## Next, compute the arc-length parametrization of the intermediate configuration
+        list_of_ell = []
+        for i in range(self.world):
+            list_of_ell.append(torch.tensor(0.0))
+        dist.all_gather(tensor_list=list_of_ell, tensor=ell_k)
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+        if self.rank > 0 and self.rank < self.world-1: 
+            del list_of_ell[-1]
+        
+            ellsum = sum(list_of_ell)
+            intm_alpha = torch.zeros(self.num_nodes)
+            for i in range(1,self.num_nodes):
+                intm_alpha[i] += list_of_ell[i-1].detach().clone()/ellsum+intm_alpha[i-1].detach().clone()
+            #Now interpolate back to the correct parametrization
+            index = torch.bucketize(self.alpha,intm_alpha)
+            weight = (self.alpha-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
+            if index == self.rank+1:
+                self.string = torch.lerp(self.string,self.voronoi[self.rank+1],weight) 
+            elif index == self.rank:
+                self.string = torch.lerp(self.voronoi[self.rank-1],self.string,weight) 
+            else:
+                raise RuntimeError("You need to interpolate from points beyond your nearest neighbors. \n \
+                                    Reduce your timestep for the string update!")
+        #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+        #of the desired  configuration,
+        #If not the case, set config equal to string center
+        #Not ideal, but will leave that to code implementation as there are a 
+        #bunch of tricky things I don't want to assume here (namely periodic
+        #boundary condition)
+
+    #Will make MD simulation run on each window
+    def run(self, n_steps):
+        #Do one step in MD simulation, constrained to Voronoi cells
+        self.send_strings()
+        voronoi_list = torch.stack(self.voronoi, dim=0)
+        self.sampler.runSimulationVor(n_steps,self.rank,voronoi_list)
+        
+        #Compute the running average
+        self.avgconfig = (self.sampler.getConfig()+self.nsamples*self.avgconfig).detach().clone()/(self.nsamples+1)
+        
+        #Update the string
+        if self.update_rule == 0:
+            self.update()
+        else:
+            self.update_matrix()
         self.timestep += 1
     #Dump the string into a file
     def dump(self,dumpstring=False):

@@ -20,6 +20,15 @@ class PyFTSSampler : public FTSSampler
             nsteps, left_weight, right_weight, left_bias, right_bias      /* Argument(s) */
             );
         };
+        virtual void runSimulationVor(int nsteps, int rank, const torch::Tensor& voronoi_cell) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            FTSSampler,      /* Parent class */
+            runSimulationVor,          /* Name of function in C++ (must match Python name) */
+            nsteps, rank, voronoi_cell      /* Argument(s) */
+            );
+        };
         torch::Tensor getConfig() override
         {
             PYBIND11_OVERRIDE(
@@ -46,6 +55,7 @@ void export_FTSSampler(py::module& m)
     py::class_<FTSSampler, PyFTSSampler, std::shared_ptr<FTSSampler> > (m, "FTSSampler")
     .def(py::init<>())
     .def("runSimulation", &FTSSampler::runSimulation)
+    .def("runSimulationVor", &FTSSampler::runSimulationVor)
     .def("getConfig", &FTSSampler::getConfig)
     .def("dumpConfig", &FTSSampler::dumpConfig)
     ;

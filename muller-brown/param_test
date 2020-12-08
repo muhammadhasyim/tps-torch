@@ -1,0 +1,7 @@
+temp 0.1
+count 2
+a0 -10 -2 0 -2 0 0
+a1 -10 -2 0 -2 1 1
+lambda 0.005
+cycles 10000 10
+seed_base 0 0 10 1000
