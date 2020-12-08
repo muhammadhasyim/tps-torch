@@ -42,7 +42,7 @@ class CommittorNet(nn.Module):
             self.lin2.weight.data = project_simplex(self.lin2.weight.data)
 
 class BrownianParticle(MLSamplerEXP):
-    def __init__(self, dt, gamma, kT, initial,prefix=''):
+    def __init__(self, dt, gamma, kT, initial,prefix='',save_config=False):
         super(BrownianParticle, self).__init__(initial.detach().clone())
         
         #Timestep
@@ -55,9 +55,10 @@ class BrownianParticle(MLSamplerEXP):
         #The current position. We make sure that its gradient zero
         self.qt = initial.detach().clone()
 
-        #IO for BP position and committor values 
-        self.qt_io = open("{}_bp_{}.txt".format(prefix,dist.get_rank()+1),"w")
-        self.committor_io = open("{}_q_{}.txt".format(prefix,dist.get_rank()+1),"w")
+        #IO for BP position and committor values
+        self.save_config = save_config
+        if self.save_config:
+            self.qt_io = open("{}_bp_{}.txt".format(prefix,dist.get_rank()+1),"w")
 
         #Allocated value for self.qi
         self.invkT = 1/kT
@@ -65,11 +66,31 @@ class BrownianParticle(MLSamplerEXP):
         
         #Tracking steps
         self.timestep = 0
-        
-    def step(self, committor_val):
+
+        #Save config size and its flattened version
+        self.config_size = initial.size()
+        self.flattened_size = initial.flatten().size()
+   
+    def initialize_from_torchconfig(self, config):
+        #by implementation, torch config cannot be structured: it must be a flat 1D tensor
+        #config can ot be flat 
+        if config.size() != self.flattened_size:
+            raise RuntimeError("Config is not flat! Check implementation")
+        else:
+            self.qt = config.view(-1,1);
+            if self.qt.size() != self.config_size:
+                raise RuntimeError("New config has inconsistent size compared to previous simulation! Check implementation")
+    
+    def computeWForce(self, committor_val, qval):
+        return -self.dt*self.kappa*self.torch_config.grad.data*(committor_val-qval)/self.gamma 
+    
+    def step(self, committor_val, onlytst=False):
         with torch.no_grad():
             #Update one step
-            self.qt += -self.dt*self.kappa*self.torch_config.grad.data*(committor_val-self.qvals[dist.get_rank()])/self.gamma -4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+            if onlytst:
+                self.qt += self.computeWForce(committor_val,0.5)-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+            else:
+                self.qt += self.computeWForce(committor_val, self.qvals[dist.get_rank()])-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
             
         #Don't forget to zero out gradient data after every timestep
         self.torch_config = (self.qt.flatten()).detach().clone()
@@ -78,14 +99,26 @@ class BrownianParticle(MLSamplerEXP):
             self.torch.grad.data.zero_()
         except:
             pass
-        
+
+    def save(self):
         #Update timestep counter
         self.timestep += 1
-        if self.timestep % 100 == 0:
-            self.qt_io.write("{} {}\n".format(self.torch_config[0],1/self.invkT))
-            self.committor_io.write("{} {}\n".format(committor_val.item(),self.qvals[dist.get_rank()]))
-            self.qt_io.flush()
-            self.committor_io.flush()
+        if self.save_config:
+            if self.timestep % 100 == 0:
+                self.qt_io.write("{} {}\n".format(self.torch_config[0],1/self.invkT))
+                self.qt_io.flush()
+    
+    def step_unbiased(self):
+        #Update one 
+        self.qt += -4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+        
+        #Don't forget to zero out gradient data after every timestep
+        self.torch_config = (self.qt.flatten()).detach().clone()
+        self.torch_config.requires_grad_()
+        try:
+            self.torch.grad.data.zero_()
+        except:
+            pass
 
 class BrownianLoss(CommittorLossEXP):
     def __init__(self, lagrange_bc, batch_size):
