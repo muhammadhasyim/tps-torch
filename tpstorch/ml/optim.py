@@ -2,7 +2,6 @@ import torch
 from torch.optim import Optimizer, SGD
 from torch.optim.optimizer import required
 import torch.distributed as dist
-from pymbar import timeseries
 
 #A heper function to project a set of vectors into a simplex
 #Unashamedly copied from https://github.com/smatmo/ProjectionOntoSimplex/blob/master/project_simplex_pytorch.py
