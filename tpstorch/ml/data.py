@@ -134,10 +134,23 @@ class TSTValidation(IterableDataset):
 
                     #Override the current configuration using a fixed initialization routine 
                     self.sampler.initialize_from_torchconfig(initial_config.detach().clone())
+                    #Zero out any gradients
+                    self.committor.zero_grad()
+                    #Forward pass
+                    self.out = self.committor(self.sampler.torch_config)
+                    #Backprop to compute gradients of x
+                    self.out.backward()
                     
                     #Run simulation and stop until it falls into the product or reactant state
                     while hitting is False:
                         self.sampler.step_unbiased()
+                        #Zero out any gradients
+                        self.committor.zero_grad()
+                        #Forward pass
+                        self.out = self.committor(self.sampler.torch_config)
+                        #Backprop to compute gradients of x
+                        self.out.backward()
+                        
                         if product_checker(self.sampler.torch_config) is True:
                             counts.append(1.0)
                             hitting = True
