@@ -22,5 +22,5 @@ setup(name='tpstorch',
                         "CMake/*.cmake",
                         "include/tpstorch/*.h",
                         "include/tpstorch/fts/*.h"]},
-      install_requires=['numpy','scipy','pybind11'],
+      install_requires=['numpy','scipy','pybind11','tqdm'],
       zip_safe=False)

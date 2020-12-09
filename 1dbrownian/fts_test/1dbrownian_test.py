@@ -44,12 +44,14 @@ end = torch.tensor([[1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 alphas = torch.linspace(0.0,1,dist.get_world_size()+2)[1:-1]
+
+
 bp_simulator = BrownianParticle(dt=0.001,D=0.1, initial=initializer(alphas[dist.get_rank()]))
 
 fts_method = CustomFTSMethod(sampler=bp_simulator,initial_config=start,final_config=end,num_nodes=dist.get_world_size()+2,deltatau=0.01,kappa=0.01)
 
 import tqdm
 for i in tqdm.tqdm(range(1000)):
-    fts_method.run(1)
+    fts_method.run(1) #<-- running n_steps in MD/MC simulation
     if (i % 200):
-        fts_method.dump(True)
+        fts_method.dump(True) #<-- dumping file!
