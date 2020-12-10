@@ -62,10 +62,6 @@ list(APPEND CMAKE_MODULE_PATH 	${TPSTORCH_ROOT})
 list(APPEND CMAKE_MODULE_PATH 	${TPSTORCH_ROOT}/CMake)
 #Include directories for TPSTorch
 include_directories(${TPSTORCH_INCLUDE_DIR})
-#Set up variables for TPSTorch Libraries
-set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
-set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
-set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
 
 #Now, Find pybind11, which should be installed along with TPSTorch
 set(find_pybind11_script "
@@ -80,6 +76,11 @@ execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "${find_pybind11_script}"
 set(PYBIND11_CMAKE_ROOT ${pybind11_dir}/share/cmake/pybind11)
 list(APPEND CMAKE_PREFIX_PATH ${PYBIND11_CMAKE_ROOT})
 find_package(pybind11 CONFIG REQUIRED)
+
+#Set up variables for TPSTorch Libraries, now that the python module extension is found
+set(TPSTORCH_LIB ${TPSTORCH_ROOT}/_tpstorch${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_FTS_LIB ${TPSTORCH_ROOT}/fts/_fts${PYTHON_MODULE_EXTENSION})
+set(TPSTORCH_LIBRARIES ${TPSTORCH_LIB} ${TPSTORCH_FTS_LIB})
 
 #Finally, look for Torch
 #list(APPEND CMAKE_PREFIX_PATH ${TPSTORCH_ROOT}/extern/pybind11/include)
