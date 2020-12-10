@@ -12,7 +12,7 @@ void export_MySampler(py::module& m)
     ;
 };
 
-PYBIND11_MODULE(mullerbrown, m)
+PYBIND11_MODULE(mullerbrown_ml, m)
 {
     export_MySampler(m);
 }

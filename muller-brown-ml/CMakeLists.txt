@@ -26,7 +26,6 @@ set(${CMAKE_PROJECT_NAME}_sources
     mysampler.cpp
     )
 
-file(COPY ${CMAKE_SOURCE_DIR}/test.py DESTINATION ${CMAKE_BINARY_DIR})
 #add_executable is what you normally use as the compiled object. For Python modules, we use pybind11_add_module instead
 #add_executable(${CMAKE_PROJECT_NAME} ${${CMAKE_PROJECT_NAME}_sources})
 pybind11_add_module(${CMAKE_PROJECT_NAME} SHARED ${${CMAKE_PROJECT_NAME}_sources} NO_EXTRAS)
