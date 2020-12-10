@@ -22,28 +22,10 @@ class MySampler : public FTSSampler
             system->seed_base = rank;
         };
         ~MySampler(){}; 
-        void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)
+        void runSimulation(int nsteps)
         {
             // Pass bias variables to simulation using pointers
-            long int lsizes[2] = {left_weight.sizes()[0], left_weight.sizes()[1]};
-            long int rsizes[2] = {right_weight.sizes()[0], right_weight.sizes()[1]};
-            system->lweight = left_weight.data_ptr<float>();
-            system->rweight = right_weight.data_ptr<float>();
-            system->lbias = left_bias.data_ptr<float>();
-            system->rbias = right_bias.data_ptr<float>();
-            system->lsizes = lsizes;
-            system->rsizes = rsizes;
             system->SimulateBias(nsteps);
-            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
-        };
-        void runSimulationVor(int nsteps, int rank, const torch::Tensor& voronoi_cell)
-        {
-            // Pass bias variables to simulation using pointers
-            long int vor_sizes[3] = {voronoi_cell.sizes()[0], voronoi_cell.sizes()[1], voronoi_cell.sizes()[2]};
-            system->rank = rank;
-            system->voronoi_cells = voronoi_cell.data_ptr<float>();
-            system->vor_sizes = vor_sizes;
-            system->SimulateVor(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
         torch::Tensor getConfig()
@@ -60,12 +42,6 @@ class MySampler : public FTSSampler
             //Do nothing for now
             //You can add whatever you want here Clay!
             system->DumpXYZBias(dump);
-        };
-        void dumpConfigVor()
-        {
-            //Do nothing for now
-            //You can add whatever you want here Clay!
-            system->DumpXYZVor();
         };
     private:
         //The MullerBrown simulator 

@@ -83,31 +83,6 @@ double MullerBrown::Energy(double2 state_) {
     return phi_;
 }
 
-double MullerBrown::VoronoiDist(double2 state_test, float * vor_cell) {
-    double dist_x = pow(state_test.x-vor_cell[0],2);
-    double dist_y = pow(state_test.y-vor_cell[1],2);
-    return sqrt(dist_x+dist_y);
-}
-
-int MullerBrown::VoronoiCheck(double2 state_) {
-    int min_index = 0;
-    double min_distance = VoronoiDist(state_, voronoi_cells);
-    for(int i=1; i<vor_sizes[0]; i++) {
-        double distance = VoronoiDist(state_, voronoi_cells+i*vor_sizes[2]);
-        if(distance < min_distance) {
-            min_distance = distance;
-            min_index = i;
-        }
-    }
-    return min_index;  
-}
-
-void MullerBrown::VoronoiSet() {
-    state.x = voronoi_cells[rank*vor_sizes[2]];
-    state.y = voronoi_cells[rank*vor_sizes[2]+1];
-    phi = Energy(state);
-}
-
 void MullerBrown::MCStep() {
     double2 state_trial;
     state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
@@ -139,17 +114,14 @@ void MullerBrown::MCStepBias() {
     state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
     double phi_ = Energy(state_trial); 
     double phi_diff = phi_-phi;
-    // Check to see if it satisfies constraints
-    double lcheck = lweight[0]*state_trial.x+lweight[1]*state_trial.y+lbias[0];
-    double rcheck = rweight[0]*state_trial.x+rweight[1]*state_trial.y+rbias[0];
-    bool check = (lcheck >= 0) && (rcheck <= 0);
-    if((phi_diff < 0) && check) {
+    // Calculate energy difference from bias
+    if((phi_diff < 0)) {
         // accept
         state.x = state_trial.x;
         state.y = state_trial.y;
         phi = phi_;
     }
-    else if((generator.d() < exp(-phi_diff/temp)) && check) {
+    else if((generator.d() < exp(-phi_diff/temp))) {
         // still accept, just a little more work
         state.x = state_trial.x;
         state.y = state_trial.y;
@@ -158,44 +130,6 @@ void MullerBrown::MCStepBias() {
     else {
         // reject
         steps_rejected++;
-    }
-    steps_tested++;
-}
-
-void MullerBrown::MCStepVor() {
-    ofstream config_dump;
-    config_dump.precision(10);
-    config_dump.open("out_"+to_string(rank), std::ios_base::app);
-    double2 state_trial;
-    state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
-    state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
-    double phi_ = Energy(state_trial); 
-    double phi_diff = phi_-phi;
-    int check = VoronoiCheck(state_trial);
-    if(check == rank) {
-        if(phi_diff < 0) {
-            // accept
-            state.x = state_trial.x;
-            state.y = state_trial.y;
-            phi = phi_;
-        }
-        else if(generator.d() < exp(-phi_diff/temp)) {
-            // still accept, just a little more work
-            state.x = state_trial.x;
-            state.y = state_trial.y;
-            phi = phi_;
-        }
-        else {
-            // reject
-            steps_rejected++;
-        }
-    }
-    else {
-        // reject
-        steps_rejected++;
-    }
-    if(count_step%50==0) {
-        config_dump << "States " << state.x << " " << state.y << " " << state_trial.x << " " << state_trial.y << " phi_diff " << phi_diff << " check " << check << " " << rank << "\n";
     }
     steps_tested++;
 }
@@ -244,33 +178,6 @@ void MullerBrown::SimulateBias(int steps) {
     }
 }
 
-void MullerBrown::SimulateVor(int steps) {
-    steps_tested = 0;
-    steps_rejected = 0;
-    phi = Energy(state);
-    // Check to see if initial config is within Voronoi cell is it supposed to be in
-    // If not, change config to Voronoi cell
-    // If outside (false), set
-    int check = VoronoiCheck(state);
-    if(check != rank) {
-        VoronoiSet();
-    }
-    for(int i=0; i<steps; i++) {
-        generator = Saru(seed_base, count_step++); 
-        MCStepVor();
-        if(dump_sim==1){
-            if(i%check_time==0) {
-                cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
-            }
-            if(i%storage_time==0) {
-                phi_storage[i/storage_time] = phi;            
-                state_storage[i/storage_time].x = state.x;
-                state_storage[i/storage_time].y = state.y;
-            }
-        }
-    }
-}
-
 void MullerBrown::DumpXYZ(ofstream& myfile) {
     // turns off synchronization of C++ streams
     ios_base::sync_with_stdio(false);
@@ -288,22 +195,7 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     cin.tie(NULL);
     config_file << 1 << endl;
     config_file << "# step " << count_step << " ";
-    if(dump==1) {
-        // Dump weights and biases
-        config_file << "lweight " << lweight[0] << " " << lweight[1] << " lbias " << lbias[0] << " ";
-        config_file << "rweight " << rweight[0] << " " << rweight[1] << " rbias " << rbias[0];
-    }
     config_file << "\n";
-    config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
-}
-
-void MullerBrown::DumpXYZVor() {
-    // turns off synchronization of C++ streams
-    ios_base::sync_with_stdio(false);
-    // Turns off flushing of out before in
-    cin.tie(NULL);
-    config_file << 1 << endl;
-    config_file << "# step " << count_step << "\n";
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
 }
 
