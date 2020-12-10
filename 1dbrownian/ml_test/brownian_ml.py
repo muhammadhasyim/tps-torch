@@ -27,6 +27,7 @@ class CommittorNet(nn.Module):
         self.broadcast()
 
     def forward(self, x):
+        #At the moment, x is flat. So if you want it to be 2x1 or 3x4 arrays, then you do it here!
         x = self.lin1(x)
         x = self.unit(x)
         x = self.lin2(x)
@@ -93,6 +94,8 @@ class BrownianParticle(MLSamplerEXP):
                 self.qt += self.computeWForce(committor_val, self.qvals[dist.get_rank()])-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
             
         #Don't forget to zero out gradient data after every timestep
+        #If you print out torch_config it should be tensor([a,b,c,..,d])
+        #where a,b,c and d are some 
         self.torch_config = (self.qt.flatten()).detach().clone()
         self.torch_config.requires_grad_()
         try:
