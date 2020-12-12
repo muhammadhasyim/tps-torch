@@ -1,15 +1,15 @@
 #ifndef MYSAMPLER_H_
 #define MYSAMPLER_H_
 
-#include <tpstorch/fts/FTSSampler.h>
+#include <tpstorch/ml/MLSamplerEXP>
 #include <torch/extension.h>
 #include "muller_brown.h"
 #include <pybind11/pybind11.h>
 
-class MySampler : public FTSSampler
+class MySampler : public MLSamplerEXP
 {
     public:
-        MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump)
+        MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump, double beta, double kappa)
             : system(new MullerBrown())
         {
             //Load parameters during construction
@@ -20,13 +20,18 @@ class MySampler : public FTSSampler
             system->state[0][1] = float(state_sys[1]);
             system->dump_sim = dump;
             system->seed_base = rank;
+            system->temp = 1.0/beta;
+            system->k_umb = kappa;
+            torch_config.requires_grad_();
         };
         ~MySampler(){}; 
-        void runSimulation(int nsteps)
+        void step(const double& comittor_val, bool onlytst = false)
         {
-            // Pass bias variables to simulation using pointers
-            system->SimulateBias(nsteps);
-            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
+
+        };
+        void step_unbiased()
+        {
+
         };
         torch::Tensor getConfig()
         {
@@ -37,7 +42,13 @@ class MySampler : public FTSSampler
             //std::cout << config << std::endl;
             return config;
         };
-        void dumpConfig(int dump)
+        void initialize_from_torchconfig(const torch::Tensor& state)
+        {
+            // I think this is how this works?
+            system->state[0][0] = state[0];
+            system->state[0][1] = state[1];
+        };
+        void save(int dump)
         {
             //Do nothing for now
             //You can add whatever you want here Clay!
