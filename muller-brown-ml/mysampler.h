@@ -6,8 +6,8 @@
 #include "muller_brown.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-//#include <tpstorch/sm/Sampler.h>
-#include "Sampler.h"
+#include <tpstorch/sm/Sampler.h>
+//#include "Sampler.h"
 
 class MySampler : public Sampler
 {

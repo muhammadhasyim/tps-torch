@@ -90,7 +90,7 @@ void export_Sampler(py::module& m)
     ;
 };
 
-PYBIND11_MODULE(/*name of module*/ _sampler, /*variable name*/ m)
+PYBIND11_MODULE(/*name of module*/ _sm, /*variable name*/ m)
 {
     export_Sampler(m);
 }

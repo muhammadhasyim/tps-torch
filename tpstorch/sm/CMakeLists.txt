@@ -2,7 +2,7 @@ set(SUBCOMPONENT_NAME sm)
 
 #### Add C++ Source Files
 set(_${SUBCOMPONENT_NAME}_sources
-    module-sampler.cpp
+    module-sm.cpp
     )
 
 #### Add C++ Header Files
