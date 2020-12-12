@@ -16,8 +16,8 @@ class MySampler : public FTSSampler
             system->GetParams(param_file,rank);
             // Initialize state
             float* state_sys = state.data_ptr<float>();
-            system->state.x = double(state_sys[0]);
-            system->state.y = double(state_sys[1]);
+            system->state[0][0] = float(state_sys[0]);
+            system->state[0][1] = float(state_sys[1]);
             system->dump_sim = dump;
             system->seed_base = rank;
         };
@@ -32,8 +32,8 @@ class MySampler : public FTSSampler
         {
             torch::Tensor config = torch::ones(2);
             //Because system state is in a struct, we allocate one by one
-            config[0] = system->state.x;
-            config[1] = system->state.y;
+            config[0] = system->state[0][0];
+            config[1] = system->state[0][1];
             //std::cout << config << std::endl;
             return config;
         };

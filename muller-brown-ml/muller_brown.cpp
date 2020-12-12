@@ -13,8 +13,7 @@ using namespace std;
 
 MullerBrown::MullerBrown() {
     // Constructor, currently does nothing
-    state.x = 0;
-    state.y = 0;
+    state.resize(1, vector<float>(2));
 }
 
 MullerBrown::~MullerBrown() {
@@ -26,7 +25,6 @@ MullerBrown::~MullerBrown() {
     delete[] x_param;
     delete[] y_param;
     delete[] phi_storage;
-    delete[] state_storage;
 }
 
 void MullerBrown::GetParams(string name, int rank_in) {
@@ -44,12 +42,12 @@ void MullerBrown::GetParams(string name, int rank_in) {
         getline(input, line);
         input >> line >> count;
         //cout << "Count is now " << count << endl;
-        a_const = new double[count];
-        a_param = new double[count];
-        b_param = new double[count];
-        c_param = new double[count];
-        x_param = new double[count];
-        y_param = new double[count];
+        a_const = new float[count];
+        a_param = new float[count];
+        b_param = new float[count];
+        c_param = new float[count];
+        x_param = new float[count];
+        y_param = new float[count];
         for(int i=0; i<count; i++) {
             input >> line >> a_const[i] >> a_param[i] >> b_param[i] >> c_param[i] >> x_param[i] >> y_param[i];
             //cout << i << " A_ " << a_const[i] << " a_ " << a_param[i] << " b_ " << b_param[i] << " c_ " << c_param[i] << " x_ " << x_param[i] << " y_ " << y_param[i] << endl;
@@ -61,8 +59,8 @@ void MullerBrown::GetParams(string name, int rank_in) {
         input >> line >> cycles >> storage_time;
         //cout << "Cycles " << cycles << " storage_time " << storage_time << endl;
         getline(input, line);
-        phi_storage = new double[cycles/storage_time];
-        state_storage = new double2[cycles/storage_time];
+        phi_storage = new float[cycles/storage_time];
+        state_storage = vector<vector<vector<float>>>(cycles/storage_time, vector<vector<float>>(1, vector<float>(2)));
         input >> line >> seed_base >> count_step >> frame_time >> check_time;
         //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
         getline(input, line);
@@ -73,32 +71,50 @@ void MullerBrown::GetParams(string name, int rank_in) {
 }
 
 
-double MullerBrown::Energy(double2 state_) {
-    double phi_ = 0.0;
+float MullerBrown::Energy(vector<vector<float>>& state_) {
+    float phi_ = 0.0;
     for(int i=0; i<count; i++) {
-        double x_term = state_.x-x_param[i];
-        double y_term = state_.y-y_param[i];
+        float x_term = state_[0][0]-x_param[i];
+        float y_term = state_[0][1]-y_param[i];
+        phi_ += a_const[i]*exp(a_param[i]*x_term*x_term+b_param[i]*x_term*y_term+c_param[i]*y_term*y_term);
+    }
+    return phi_;
+}
+
+float MullerBrown::Energy(vector<float>& state_) {
+    float phi_ = 0.0;
+    for(int i=0; i<count; i++) {
+        float x_term = state_[0]-x_param[i];
+        float y_term = state_[1]-y_param[i];
+        phi_ += a_const[i]*exp(a_param[i]*x_term*x_term+b_param[i]*x_term*y_term+c_param[i]*y_term*y_term);
+    }
+    return phi_;
+}
+
+float MullerBrown::Energy(float* state_) {
+    float phi_ = 0.0;
+    for(int i=0; i<count; i++) {
+        float x_term = state_[0]-x_param[i];
+        float y_term = state_[1]-y_param[i];
         phi_ += a_const[i]*exp(a_param[i]*x_term*x_term+b_param[i]*x_term*y_term+c_param[i]*y_term*y_term);
     }
     return phi_;
 }
 
 void MullerBrown::MCStep() {
-    double2 state_trial;
-    state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
-    state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
-    double phi_ = Energy(state_trial); 
-    double phi_diff = phi_-phi;
+    vector<float> state_trial = {0.0, 0.0};
+    state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
+    state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
+    float phi_ = Energy(state_trial); 
+    float phi_diff = phi_-phi;
     if(phi_diff < 0) {
         // accept
-        state.x = state_trial.x;
-        state.y = state_trial.y;
+        state[0] = state_trial;
         phi = phi_;
     }
     else if(generator.d() < exp(-phi_diff/temp)) {
         // still accept, just a little more work
-        state.x = state_trial.x;
-        state.y = state_trial.y;
+        state[0] = state_trial;
         phi = phi_;
     }
     else {
@@ -109,23 +125,59 @@ void MullerBrown::MCStep() {
 }
 
 void MullerBrown::MCStepBias() {
-    double2 state_trial;
-    state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
-    state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
-    double phi_ = Energy(state_trial); 
-    double phi_diff = phi_-phi;
+    vector<float> state_trial = {0.0, 0.0};
+    state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
+    state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
     // Calculate energy difference from bias
-    if((phi_diff < 0)) {
+    float phi_ = Energy(state_trial); 
+    float phi_diff = phi_-phi;
+    if(phi_diff < 0) {
         // accept
-        state.x = state_trial.x;
-        state.y = state_trial.y;
+        state[0] = state_trial;
         phi = phi_;
     }
-    else if((generator.d() < exp(-phi_diff/temp))) {
+    else if(generator.d() < exp(-phi_diff/temp)) {
         // still accept, just a little more work
-        state.x = state_trial.x;
-        state.y = state_trial.y;
+        state[0] = state_trial;
         phi = phi_;
+    }
+    else {
+        // reject
+        steps_rejected++;
+    }
+    steps_tested++;
+}
+
+float* MullerBrown::MCStepBiasPropose() {
+    float* state_trial = new float[2];
+    state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
+    state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
+    phi = Energy(state);
+    float committor_diff = committor-committor_umb;
+    phi_umb = 0.5*k_umb*committor_diff*committor_diff;
+    return state_trial;
+}
+
+void MullerBrown::MCStepBiasAR(float* state_trial, float committor_) {
+    // Calculate energy difference from bias
+    float phi_ = Energy(state_trial); 
+    float phi_diff = phi_-phi;
+    float committor_diff = committor_-committor_umb;
+    float phi_umb_ = 0.5*k_umb*committor_diff*committor_diff;
+    phi_diff += phi_umb_ - phi_umb;
+    if(phi_diff < 0) {
+        // accept
+        state[0][0] = state_trial[0];
+        state[0][1] = state_trial[1];
+        phi = phi_;
+        phi_umb = phi_umb_;
+    }
+    else if(generator.d() < exp(-phi_diff/temp)) {
+        // still accept, just a little more work
+        state[0][0] = state_trial[0];
+        state[0][1] = state_trial[1];
+        phi = phi_;
+        phi_umb = phi_umb_;
     }
     else {
         // reject
@@ -145,12 +197,11 @@ void MullerBrown::Simulate(int steps) {
         generator = Saru(seed_base, count_step++); 
         MCStep();
         if(i%check_time==0) {
-            cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
+            cout << "Cycle " << i << " phi " << phi << " A/R " << float(steps_rejected)/float(steps_tested) << endl; 
         }
         if(i%storage_time==0) {
             phi_storage[i/storage_time] = phi;            
-            state_storage[i/storage_time].x = state.x;
-            state_storage[i/storage_time].y = state.y;
+            state_storage[i/storage_time]= state;
         }
         if(i%frame_time==0) {
             DumpXYZ(config_file_2);
@@ -167,12 +218,11 @@ void MullerBrown::SimulateBias(int steps) {
         MCStepBias();
         if(dump_sim==1){
             if(i%check_time==0) {
-                cout << "Cycle " << i << " phi " << phi << " A/R " << double(steps_rejected)/double(steps_tested) << endl; 
+                cout << "Cycle " << i << " phi " << phi << " A/R " << float(steps_rejected)/float(steps_tested) << endl; 
             }
             if(i%storage_time==0) {
                 phi_storage[i/storage_time] = phi;            
-                state_storage[i/storage_time].x = state.x;
-                state_storage[i/storage_time].y = state.y;
+                state_storage[i/storage_time] = state;
             }
         }
     }
@@ -185,7 +235,7 @@ void MullerBrown::DumpXYZ(ofstream& myfile) {
     cin.tie(NULL);
     myfile << 1 << endl;
     myfile << "# step " << count_step << endl;
-    myfile << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
+    myfile << "0 " << std::scientific << state[0][0] << " " << std::scientific << state[0][1] << " 0\n";
 }
 
 void MullerBrown::DumpXYZBias(int dump=0) {
@@ -196,12 +246,12 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     config_file << 1 << endl;
     config_file << "# step " << count_step << " ";
     config_file << "\n";
-    config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
+    config_file << "0 " << std::scientific << state[0][0] << " " << std::scientific << state[0][1] << " 0\n";
 }
 
 void MullerBrown::DumpPhi() {
     // Evaluate same stats stuff and dump all stored values
-    double phi_ave = 0.0;
+    float phi_ave = 0.0;
     int storage = cycles/storage_time;
     for(int i=0; i<storage; i++) {
         phi_ave += phi_storage[i];
@@ -209,9 +259,9 @@ void MullerBrown::DumpPhi() {
     phi_ave /= storage;
 
     // Standard deviation with Bessel's correction
-    double phi_std = 0.0;
+    float phi_std = 0.0;
     for(int i=0; i<storage; i++) {
-        double phi_std_ = phi_ave-phi_storage[i];
+        float phi_std_ = phi_ave-phi_storage[i];
         phi_std += phi_std_*phi_std_;
     }
     phi_std = sqrt(phi_std/(storage-1));
@@ -237,7 +287,7 @@ void MullerBrown::DumpStates() {
     myfile.open("state_storage.txt");
     myfile << "States from run" << endl;
     for(int i=0; i<storage; i++) {
-        myfile << std::scientific << state_storage[i].x << " " << std::scientific << state_storage[i].y << "\n";
+        myfile << std::scientific << state_storage[i][0][0] << " " << std::scientific << state_storage[i][0][1] << "\n";
     }
 }
 
