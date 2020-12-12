@@ -41,6 +41,20 @@ class CommittorNet(nn.Module):
         with torch.no_grad():
             self.lin2.weight.data = project_simplex(self.lin2.weight.data)
 
+class MullerBrown(MLSamplerEXP):
+    #I'm wrapping the sampler in a sampler
+    #Lord praise have mercy on my soul
+    def __init__(self, sampler):
+        super(MullerBrown, self).__init(sampler)
+    
+    def initialize_from_torchconfig(self, config):
+
+    def step(self, committor_val, onlytst=False):
+
+    def step_unbiased(self):
+
+    def step_unbiased(self):
+
 class MullerBrownLoss(CommittorLossEXP):
     def __init__(self, lagrange_bc, batch_size):
         super(MullerBrownLoss,self).__init__()
