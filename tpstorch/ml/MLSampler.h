@@ -3,9 +3,7 @@
 #define __ML_SAMPLER_H__
 
 #include <torch/torch.h>
-#include <torch/extension.h>
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 #include <c10d/ProcessGroupMPI.hpp>
 
 class MLSamplerEXP
@@ -133,129 +131,5 @@ class MLSamplerEXP
         //A pointer for the MPI process group used in the current simulation
         std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
 };
-
-//Trampoline class for proper inheritance behavior in the Python side
-class PyMLSamplerEXP : public MLSamplerEXP
-{
-    public:
-        using MLSamplerEXP::MLSamplerEXP;
-        //Default constructor creates 3x3 identity matrix
-        virtual void step(const double& committor_val, bool onlytst = false) override
-        {
-        PYBIND11_OVERRIDE_PURE(
-            void, /* Return type */
-            MLSamplerEXP,      /* Parent class */
-            step,          /* Name of function in C++ (must match Python name) */
-            committor_val, onlytst      /* Argument(s) */
-            );
-        };
-        
-        virtual void step_unbiased() override
-        {
-        PYBIND11_OVERRIDE_PURE(
-            void, /* Return type */
-            MLSamplerEXP,      /* Parent class */
-            step_unbiased,          /* Name of function in C++ (must match Python name) */
-            );
-        };
-        
-        virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                torch::Tensor, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                computeW,          /* Name of function in C++ (must match Python name) */
-                committor_val, q
-                );
-            //Do nothing for nowi
-            //Might try and raise an error if this base method gets called instead
-        };
-        
-        virtual torch::Tensor computeC(const double& committor_val) override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                torch::Tensor, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                computeC,          /* Name of function in C++ (must match Python name) */
-                committor_val
-                );
-            //Do nothing for nowi
-            //Might try and raise an error if this base method gets called instead
-        };
-        
-        virtual void computeFactors(const double& committor_val) override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                computeFactors,          /* Name of function in C++ (must match Python name) */
-                committor_val
-                );
-            //Do nothing for nowi
-            //Might try and raise an error if this base method gets called instead
-        };
-
-        virtual void runSimulation(int nsteps) override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                runSimulation,          /* Name of function in C++ (must match Python name) */
-                nsteps /* Argument(s) */
-                );
-        };
-
-        virtual void propose() override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                propose,          /* Name of function in C++ (must match Python name) */
-                );
-            //Do nothing for now
-        };
-
-        virtual void acceptReject() override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                acceptReject,          /* Name of function in C++ (must match Python name) */
-                );
-            //Do nothing for now
-        };
-
-        virtual void move() override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                move,          /* Name of function in C++ (must match Python name) */
-                );
-            //Do nothing for now
-        };
-
-        virtual torch::Tensor getConfig() override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                torch::Tensor, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                getConfig,          /* Name of function in C++ (must match Python name) */
-                );
-        };
-
-        virtual void dumpConfig() override
-        {
-            PYBIND11_OVERRIDE_PURE(
-                void, /* Return type */
-                MLSamplerEXP,      /* Parent class */
-                dumpConfig,          /* Name of function in C++ (must match Python name) */
-                );
-            //Do nothing for now
-        };
-
-};
-
-
 
 #endif //__ML_SAMPLER_H__

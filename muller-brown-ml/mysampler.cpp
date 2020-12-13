@@ -4,7 +4,9 @@ namespace py = pybind11;
 
 void export_MySampler(py::module& m)
 {
-    py::class_<MySampler, MySampler, std::shared_ptr<MySampler> > (m, "MySampler")
+
+    py::module_::import("tpstorch.ml._ml");//.attr("MLSamplerEXP");
+    py::class_<MySampler, MLSamplerEXP, std::shared_ptr<MySampler> > (m, "MySampler")
     .def(py::init< std::string, torch::Tensor, int, int, double, double, torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
     .def("step", &MySampler::step)
     .def("step_unbiased", &MySampler::step_unbiased)

@@ -1,11 +1,11 @@
 #ifndef MYSAMPLER_H_
 #define MYSAMPLER_H_
 
-#include <torch/torch.h>
-#include <torch/extension.h>
+//#include <torch/torch.h>
+//#include <torch/extension.h>
 #include "muller_brown.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+//#include <pybind11/pybind11.h>
+//#include <pybind11/stl.h>
 #include <tpstorch/ml/MLSampler.h>
 
 class MySampler : public MLSamplerEXP
