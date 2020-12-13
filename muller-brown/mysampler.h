@@ -19,6 +19,7 @@ class MySampler : public FTSSampler
             system->state.x = double(state_sys[0]);
             system->state.y = double(state_sys[1]);
             system->dump_sim = dump;
+            system->seed_base = rank;
         };
         ~MySampler(){}; 
         void runSimulation(int nsteps, const torch::Tensor& left_weight, const torch::Tensor& right_weight, const torch::Tensor& left_bias, const torch::Tensor& right_bias)

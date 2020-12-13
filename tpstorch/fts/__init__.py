@@ -415,7 +415,6 @@ class FTSMethodVor:
         forces = [torch.empty(self.config_size[0], self.config_size[1], dtype=torch.float) for i in range(self.world)] 
         dist.all_gather(forces, force)
         forces_solve = torch.empty(self.world*self.config_size[0]*self.config_size[1], dtype=torch.float)
-        forces_solve = torch.empty(self.world*self.config_size[0]*self.config_size[1], dtype=torch.float)
         for i in range(self.config_size[1]):
             for j in range(self.world):
                 for k in range(self.config_size[0]):

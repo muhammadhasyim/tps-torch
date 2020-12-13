@@ -1,7 +1,7 @@
 import torch
 import tpstorch.fts
 import mullerbrown as mb
-a = mb.MySampler("param",torch.tensor([[0.0,1.0]]),0)
+a = mb.MySampler("param",torch.tensor([[0.0,1.0]]),0,0)
 
 #These are just mock tensors
 #Intepreat the MD potential as a 2D system for one particle

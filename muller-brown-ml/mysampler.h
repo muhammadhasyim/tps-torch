@@ -1,11 +1,14 @@
-//Generic class interface for an MD sampler
-#ifndef __ML_SAMPLER_H__
-#define __ML_SAMPLER_H__
+#ifndef MYSAMPLER_H_
+#define MYSAMPLER_H_
 
 #include <torch/torch.h>
-#include <c10d/ProcessGroupMPI.hpp>
+#include <torch/extension.h>
+#include "muller_brown.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <tpstorch/ml/MLSampler.h>
 
-class MLSamplerEXP
+class MySampler : public MLSamplerEXP
 {
     public:
 
@@ -32,17 +35,24 @@ class MLSamplerEXP
 
         //Umbrella potential constant 
         double kappa;
-        
-        //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
-        MLSamplerEXP(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
+
+        MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump, double invkT, double kappa, const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+            : system(new MullerBrown()), torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
                 qvals(torch::linspace(0,1,mpi_group->getSize())), invkT(0), kappa(0), m_mpi_group(mpi_group)
         {
-            //Turn on the requires grad by default
+            //Load parameters during construction
+            system->GetParams(param_file,rank);
+            // Initialize state
+            float* state_sys = state.data_ptr<float>();
+            system->state[0][0] = float(state_sys[0]);
+            system->state[0][1] = float(state_sys[1]);
+            system->dump_sim = dump;
+            system->seed_base = rank;
+            system->temp = 1.0/invkT;
+            system->k_umb = kappa;
             torch_config.requires_grad_();
         };
-        virtual ~MLSamplerEXP(){};
-        //Default time-stepper for doing the biased simulations 
+        ~MySampler(){}; 
         virtual void step(const double& committor_val, bool onlytst = false)
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
@@ -91,44 +101,65 @@ class MLSamplerEXP
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
-        virtual void runSimulation(int nsteps)
+
+        void runSimulation(int nsteps)
         {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
-            //Might try and raise an error if this base method gets called instead
+            system->SimulateBias(nsteps);
         };
-        virtual void propose()
+
+        void propose(const double& comittor_val, bool onlytst = false)
         {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+
+        };
+
+        void acceptReject(const double& comittor_val, bool onlytst = false)
+        {
+
+        };
+
+        void move(const double& comittor_val, bool onlytst = false)
+        {
+
+        };
+        
+        void step_unbiased()
+        {
+
+        };
+
+        void initialize_from_torchconfig(const torch::Tensor& state)
+        {
+            // I think this is how this works?
+            float* state_sys = state.data_ptr<float>();
+            system->state[0][0] = state_sys[0];
+            system->state[0][1] = state_sys[1];
+        };
+
+        torch::Tensor getConfig()
+        {
+            torch::Tensor config = torch::ones(2);
+            //Because system state is in a struct, we allocate one by one
+            config[0] = system->state[0][0];
+            config[1] = system->state[0][1];
+            //std::cout << config << std::endl;
+            return config;
+        };
+
+        void dumpConfig(int dump)
+        {
             //Do nothing for now
-            //Might try and raise an error if this base method gets called instead
+            //You can add whatever you want here Clay!
+            system->DumpXYZBias(dump);
         };
-        virtual void acceptReject()
-        {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now
-            //Might try and raise an error if this base method gets called instead
-        };
-        virtual void move()
-        {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now
-            //Might try and raise an error if this base method gets called instead
-        };
-        virtual torch::Tensor getConfig()
-        {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            return torch::eye(3);
-        };
-        virtual void dumpConfig()
-        {
-            throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now
-            //Might try and raise an error if this base method gets called instead
-        };
+
     protected:
         //A pointer for the MPI process group used in the current simulation
         std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
+
+    private:
+        //The MullerBrown simulator 
+        //I did shared_ptr so that it can clean up itself during destruction
+        std::shared_ptr<MullerBrown> system;
 };
 
-#endif //__ML_SAMPLER_H__
+#endif
