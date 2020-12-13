@@ -5,7 +5,9 @@ namespace py = pybind11;
 void export_MySampler(py::module& m)
 {
 
-    py::module_::import("tpstorch.ml._ml");//.attr("MLSamplerEXP");
+    //MH: This line below is added because if you didn't import tpstorch in the test script prior to importing mullerbrown_ml
+    //it can't find the implementation of MLSamplerEXP
+    py::module_::import("tpstorch.ml._ml");
     py::class_<MySampler, MLSamplerEXP, std::shared_ptr<MySampler> > (m, "MySampler")
     .def(py::init< std::string, torch::Tensor, int, int, double, double, torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
     .def("step", &MySampler::step)

@@ -11,7 +11,7 @@
 class MySampler : public MLSamplerEXP
 {
     public:
-        /*
+        /* MH: These things were already defined in MLSamplerEXP, so you can comment it out
         //Current configuration of the system as a (flattened) Torch tensor
         //This is necessarry for layout compatibility with neural net!
         torch::Tensor torch_config;
