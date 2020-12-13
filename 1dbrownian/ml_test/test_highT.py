@@ -1,3 +1,7 @@
+#Append tpstorch path
+import sys
+sys.path.append('/global/common/software/m2893/tps-torch/build')
+
 #Import necessarry tools from torch
 import torch
 import torch.distributed as dist
@@ -24,7 +28,7 @@ initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
 bp_sampler = BrownianParticle(dt=2e-3,gamma=1.0,kT=0.4,initial = initial_config,prefix=prefix,save_config=True)
 
 #Initialize neural net
-committor = CommittorNet(d=1,num_nodes=200).to('cpu')
+committor = CommittorNet(d=1,num_nodes=100).to('cpu')
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -66,6 +70,7 @@ if dist.get_rank() == 0:
     loss_io = open("{}_loss.txt".format(prefix),'w')
 
 #Training loop
+#1 epoch: 200 iterations, 200 time-windows
 for epoch in range(1):
     if dist.get_rank() == 0:
         print("epoch: [{}]".format(epoch+1))
@@ -112,7 +117,8 @@ for epoch in range(1):
                 print(reweight)
                 loss_io.write('{:d} {:.5E} \n'.format(actual_counter+1,main_loss))
                 loss_io.flush()
-            torch.save(committor.state_dict(), "{}_params_{}".format(prefix,dist.get_rank()+1))
+                #Only save parameters from rank 0
+                torch.save(committor.state_dict(), "{}_params_{}".format(prefix,dist.get_rank()+1))
         actual_counter += 1
     
 
@@ -123,6 +129,11 @@ if dist.get_rank() == 0:
 batch_size = 100 #batch of initial configuration to do the committor analysis per rank
 dataset = TSTValidation(bp_sampler, committor, period=20)
 loader = DataLoader(dataset,batch_size=batch_size)
+
+data = np.loadtxt('{}_bp_6.txt'.format(prefix))[100::2,0]
+val = float(data[dist.get_rank()+1])
+init_config = torch.tensor([[val]]).flatten()
+bp_sampler.initialize_from_torchconfig(init_config)
 
 #Save validation scores and 
 myval_io = open("{}_validation_{}.txt".format(prefix,dist.get_rank()+1),'w')
