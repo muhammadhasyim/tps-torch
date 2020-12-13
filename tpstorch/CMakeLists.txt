@@ -32,3 +32,4 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/extern/pybind11 DESTINATION ${CMAKE_CURREN
 
 add_subdirectory(fts)
 add_subdirectory(ml)
+add_subdirectory(sm)
