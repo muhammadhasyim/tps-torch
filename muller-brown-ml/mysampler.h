@@ -11,7 +11,7 @@
 class MySampler : public MLSamplerEXP
 {
     public:
-
+        /*
         //Current configuration of the system as a (flattened) Torch tensor
         //This is necessarry for layout compatibility with neural net!
         torch::Tensor torch_config;
@@ -35,10 +35,9 @@ class MySampler : public MLSamplerEXP
 
         //Umbrella potential constant 
         double kappa;
-
+        */
         MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump, double invkT, double kappa, const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : system(new MullerBrown()), torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
-                qvals(torch::linspace(0,1,mpi_group->getSize())), invkT(0), kappa(0), m_mpi_group(mpi_group)
+            : MLSamplerEXP(config, mpi_group), system(new MullerBrown())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);
@@ -53,6 +52,7 @@ class MySampler : public MLSamplerEXP
             torch_config.requires_grad_();
         };
         ~MySampler(){}; 
+        /* MH: Didn't saw you had an empty implementation in the bottom so I commented this out
         virtual void step(const double& committor_val, bool onlytst = false)
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
@@ -66,7 +66,7 @@ class MySampler : public MLSamplerEXP
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
             //Might try and raise an error if this base method gets called instead
         };
-        
+        */ 
         //Helper function for computing umbrella potential
         virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q)
         {
@@ -151,10 +151,6 @@ class MySampler : public MLSamplerEXP
             //You can add whatever you want here Clay!
             system->DumpXYZBias(dump);
         };
-
-    protected:
-        //A pointer for the MPI process group used in the current simulation
-        std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
 
     private:
         //The MullerBrown simulator 

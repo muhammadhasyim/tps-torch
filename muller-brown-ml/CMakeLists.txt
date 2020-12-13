@@ -13,6 +13,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 #Finding TPSTorch, pybind11, and Torch
 include(FindTPSTorch.cmake)
 
+#Find MPI, because MLSampler requires it
+find_package(MPI REQUIRED)
+include_directories(${MPI_CXX_INCLUDE_DIRS})
+
 # Plugins must be built as shared libraries
 if (ENABLE_STATIC)
     message(SEND_ERROR "Needs to be built as shared library!")
