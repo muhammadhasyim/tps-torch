@@ -3,6 +3,7 @@
 #define __ML_SAMPLER_H__
 
 #include <torch/torch.h>
+#include <pybind11/pybind11.h>
 #include <c10d/ProcessGroupMPI.hpp>
 
 class MLSamplerEXP

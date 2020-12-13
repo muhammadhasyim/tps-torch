@@ -1,8 +1,8 @@
 #include "MLSampler.h"
+#include <torch/torch.h>
 #include <torch/extension.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
 namespace py = pybind11;
 
 //Trampoline class for proper inheritance behavior in the Python side
@@ -126,7 +126,6 @@ class PyMLSamplerEXP : public MLSamplerEXP
         };
 
 };
-
 
 void export_MLSamplerEXP(py::module& m)
 {

@@ -4,26 +4,30 @@ namespace py = pybind11;
 
 void export_MySampler(py::module& m)
 {
+
+    //MH: This line below is added because if you didn't import tpstorch in the test script prior to importing mullerbrown_ml
+    //it can't find the implementation of MLSamplerEXP
+    py::module_::import("tpstorch.ml._ml");
     py::class_<MySampler, MLSamplerEXP, std::shared_ptr<MySampler> > (m, "MySampler")
     .def(py::init< std::string, torch::Tensor, int, int, double, double, torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
-    .def("step", &MLSamplerEXP::step)
-    .def("step_unbiased", &MLSamplerEXP::step_unbiased)
-    .def("computeW", &MLSamplerEXP::computeW)
-    .def("computeC", &MLSamplerEXP::computeC)
-    .def("computeFactors", &MLSamplerEXP::computeFactors)
-    .def("runSimulation", &MLSamplerEXP::runSimulation)
-    .def("propose", &MLSamplerEXP::propose)
-    .def("acceptReject", &MLSamplerEXP::acceptReject)
-    .def("move", &MLSamplerEXP::move)
-    .def("getConfig", &MLSamplerEXP::getConfig)
-    .def("dumpConfig", &MLSamplerEXP::dumpConfig)
-    .def_readwrite("torch_config", &MLSamplerEXP::torch_config)
-    .def_readwrite("fwd_weightfactor", &MLSamplerEXP::fwd_weightfactor)
-    .def_readwrite("bwrd_weightfactor", &MLSamplerEXP::bwrd_weightfactor)
-    .def_readwrite("reciprocal_normconstant", &MLSamplerEXP::reciprocal_normconstant)
-    .def_readwrite("qvals", &MLSamplerEXP::qvals)
-    .def_readwrite("invkT", &MLSamplerEXP::invkT)
-    .def_readwrite("kappa", &MLSamplerEXP::kappa)
+    .def("step", &MySampler::step)
+    .def("step_unbiased", &MySampler::step_unbiased)
+    .def("computeW", &MySampler::computeW)
+    .def("computeC", &MySampler::computeC)
+    .def("computeFactors", &MySampler::computeFactors)
+    .def("runSimulation", &MySampler::runSimulation)
+    .def("propose", &MySampler::propose)
+    .def("acceptReject", &MySampler::acceptReject)
+    .def("move", &MySampler::move)
+    .def("getConfig", &MySampler::getConfig)
+    .def("dumpConfig", &MySampler::dumpConfig)
+    .def_readwrite("torch_config", &MySampler::torch_config)
+    .def_readwrite("fwd_weightfactor", &MySampler::fwd_weightfactor)
+    .def_readwrite("bwrd_weightfactor", &MySampler::bwrd_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &MySampler::reciprocal_normconstant)
+    .def_readwrite("qvals", &MySampler::qvals)
+    .def_readwrite("invkT", &MySampler::invkT)
+    .def_readwrite("kappa", &MySampler::kappa)
     ;
 };
 
