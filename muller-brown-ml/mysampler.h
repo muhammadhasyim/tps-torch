@@ -36,13 +36,13 @@ class MySampler : public MLSamplerEXP
         //Umbrella potential constant 
         double kappa;
         */
-        MySampler(std::string param_file, const torch::Tensor& state, int rank, int dump, double invkT, double kappa, const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+        MySampler(std::string param_file, const torch::Tensor& config, int rank, int dump, double invkT, double kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             : MLSamplerEXP(config, mpi_group), system(new MullerBrown())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);
             // Initialize state
-            float* state_sys = state.data_ptr<float>();
+            float* state_sys = config.data_ptr<float>();
             system->state[0][0] = float(state_sys[0]);
             system->state[0][1] = float(state_sys[1]);
             system->dump_sim = dump;
@@ -68,21 +68,21 @@ class MySampler : public MLSamplerEXP
         };
         */ 
         //Helper function for computing umbrella potential
-        virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q)
+        torch::Tensor computeW(const double& committor_val, const torch::Tensor& q)
         {
             torch::NoGradGuard no_grad_guard;
             return 0.5*kappa*(committor_val-q)*(committor_val-q);
         }
 
         //Helper function for computing c(x)
-        virtual torch::Tensor computeC(const double& committor_val)
+        torch::Tensor computeC(const double& committor_val)
         {
             torch::NoGradGuard no_grad_guard;
             return torch::sum(torch::exp(-invkT*computeW(committor_val, qvals))); 
         }
 
         // A routine for computing two umbrella window weights. One is w_{l+1}(x)/w_l(x) and the other is w_{l-1}(x)/w_l(x)
-        virtual void computeFactors(const double& committor_val)
+        void computeFactors(const double& committor_val)
         {
             torch::NoGradGuard no_grad_guard;
             reciprocal_normconstant = 1/computeC(committor_val);
@@ -107,14 +107,17 @@ class MySampler : public MLSamplerEXP
             system->SimulateBias(nsteps);
         };
 
-        void propose(const double& comittor_val, bool onlytst = false)
+        void propose(torch::Tensor& state, const double& committor_val, bool onlytst = false)
         {
-
+            float* state_sys = state.data_ptr<float>();
+            system->committor = float(committor_val);
+            system->MCStepBiasPropose(state_sys, onlytst);
         };
 
-        void acceptReject(const double& comittor_val, bool onlytst = false)
+        void acceptReject(const torch::Tensor& state, const double& committor_val, bool onlytst = false, bool bias = false)
         {
-
+            float* state_sys = state.data_ptr<float>();
+            system->MCStepBiasAR(state_sys, committor_val, onlytst, bias);
         };
 
         void move(const double& comittor_val, bool onlytst = false)
@@ -122,11 +125,6 @@ class MySampler : public MLSamplerEXP
 
         };
         
-        void step_unbiased()
-        {
-
-        };
-
         void initialize_from_torchconfig(const torch::Tensor& state)
         {
             // I think this is how this works?

@@ -148,23 +148,29 @@ void MullerBrown::MCStepBias() {
     steps_tested++;
 }
 
-float* MullerBrown::MCStepBiasPropose() {
-    float* state_trial = new float[2];
+void MullerBrown::MCStepBiasPropose(float* state_trial, bool onlytst) {
     state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
     state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
     phi = Energy(state);
     float committor_diff = committor-committor_umb;
+    if(onlytst) {
+        committor_diff = committor-0.5;
+    }
     phi_umb = 0.5*k_umb*committor_diff*committor_diff;
-    return state_trial;
 }
 
-void MullerBrown::MCStepBiasAR(float* state_trial, float committor_) {
+void MullerBrown::MCStepBiasAR(float* state_trial, float committor_, bool onlytst, bool bias) {
     // Calculate energy difference from bias
     float phi_ = Energy(state_trial); 
     float phi_diff = phi_-phi;
     float committor_diff = committor_-committor_umb;
+    if(onlytst) {
+        committor_diff = committor_-0.5;
+    }
     float phi_umb_ = 0.5*k_umb*committor_diff*committor_diff;
-    phi_diff += phi_umb_ - phi_umb;
+    if(bias){
+        phi_diff += phi_umb_ - phi_umb;
+    }
     if(phi_diff < 0) {
         // accept
         state[0][0] = state_trial[0];
@@ -244,7 +250,7 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     // Turns off flushing of out before in
     cin.tie(NULL);
     config_file << 1 << endl;
-    config_file << "# step " << count_step << " ";
+    config_file << "# step " << count_step << " " << committor;
     config_file << "\n";
     config_file << "0 " << std::scientific << state[0][0] << " " << std::scientific << state[0][1] << " 0\n";
 }
