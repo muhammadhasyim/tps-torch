@@ -2,11 +2,12 @@
 #define MYSAMPLER_H_
 
 //#include <torch/torch.h>
-//#include <torch/extension.h>
+#include <torch/extension.h>
 #include "muller_brown.h"
 //#include <pybind11/pybind11.h>
 //#include <pybind11/stl.h>
 #include <tpstorch/ml/MLSampler.h>
+//#include <c10d/ProcessGroupMPI.hpp>
 
 class MySampler : public MLSamplerEXP
 {

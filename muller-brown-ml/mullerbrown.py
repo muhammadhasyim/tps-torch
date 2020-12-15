@@ -46,10 +46,10 @@ class CommittorNet(nn.Module):
 # within function
 # have omnious committor part that actual committor overrides?
 class MullerBrown(MySampler):
-    def __init__(self,param,config,rank,dump,beta,kappa):
-        super(MullerBrown, self).__init__(param,config.detach().clone(),rank,dump,beta,kappa)
+    def __init__(self,param,config,rank,dump,beta,kappa,mpi_group,committor):
+        super(MullerBrown, self).__init__(param,config.detach().clone(),rank,dump,beta,kappa,mpi_group)
 
-        self.committor = []
+        self.committor = committor
 
         #Save config size and its flattened version
         self.config_size = config.size()
