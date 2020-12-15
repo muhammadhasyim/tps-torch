@@ -32,7 +32,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
         
         virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
         {
-            PYBIND11_OVERRIDE_PURE(
+            PYBIND11_OVERRIDE(
                 torch::Tensor, /* Return type */
                 MLSamplerEXP,      /* Parent class */
                 computeW,          /* Name of function in C++ (must match Python name) */
@@ -44,7 +44,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
         
         virtual torch::Tensor computeC(const double& committor_val) override
         {
-            PYBIND11_OVERRIDE_PURE(
+            PYBIND11_OVERRIDE(
                 torch::Tensor, /* Return type */
                 MLSamplerEXP,      /* Parent class */
                 computeC,          /* Name of function in C++ (must match Python name) */
@@ -56,7 +56,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
         
         virtual void computeFactors(const double& committor_val) override
         {
-            PYBIND11_OVERRIDE_PURE(
+            PYBIND11_OVERRIDE(
                 void, /* Return type */
                 MLSamplerEXP,      /* Parent class */
                 computeFactors,          /* Name of function in C++ (must match Python name) */
