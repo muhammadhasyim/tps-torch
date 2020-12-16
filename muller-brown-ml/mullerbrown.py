@@ -59,15 +59,8 @@ class MullerBrown(MySampler):
         self.torch_config = config
 
     def initialize_from_torchconfig(self, config):
-        #by implementation, torch config cannot be structured: it must be a flat 1D tensor
-        #config can ot be flat 
-        if config.size() != self.flattened_size:
-            raise RuntimeError("Config is not flat! Check implementation")
-        else:
-            self.torch_config = config
-            self.setConfig(self.torch_config)
-            if self.torch_config.size() != self.config_size:
-                raise RuntimeError("New config has inconsistent size compared to previous simulation! Check implementation")
+        # Don't have to worry about all that much all, can just set it
+        self.setConfig(config)
 
     def step(self, committor_val, onlytst=False):
         with torch.no_grad():
@@ -85,9 +78,8 @@ class MullerBrown(MySampler):
     def step_unbiased(self):
         with torch.no_grad():
             config_test = torch.zeros_like(self.torch_config)
-            self.propose(config_test, committor_val, onlytst)
-            committor_val_ = self.committor(config_test)
-            self.acceptReject(config_test, committor_val_, onlytst, False)
+            self.propose(config_test, 0.0, False)
+            self.acceptReject(config_test, 0.0, False, False)
         self.torch_config = (self.getConfig().flatten()).detach().clone()
         self.torch_config.requires_grad_()
         try:
@@ -114,12 +106,9 @@ class MullerBrownLoss(CommittorLossEXP):
         #Assume that first dimension is batch dimension
         loss_bc = torch.zeros(1)
         for i, config in enumerate(configs):
-            start_ = config-self.start
-            start_ = start_.pow(2).sum()**0.5
-            end_ = config-self.end
-            end_ = end_.pow(2).sum()**0.5
-            if start_ <= self.radii:
+            check = config[0]+config[1]
+            if check <= 0.2:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())**2)*invnormconstants[i]
-            if end_ <= self.radii:
+            elif check >= 1.8:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())-1.0)**2*invnormconstants[i]
         return loss_bc/(i+1)
