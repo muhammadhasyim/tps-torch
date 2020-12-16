@@ -251,7 +251,7 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     // Turns off flushing of out before in
     cin.tie(NULL);
     config_file << 1 << endl;
-    config_file << "# step " << count_step << " " << committor;
+    config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
     config_file << "\n";
     config_file << "0 " << std::scientific << state[0][0] << " " << std::scientific << state[0][1] << " 0\n";
 }

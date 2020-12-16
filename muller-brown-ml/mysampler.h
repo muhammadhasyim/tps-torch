@@ -52,6 +52,8 @@ class MySampler : public MLSamplerEXP
             system->seed_base += rank;
             system->temp = 1.0/invkT;
             system->k_umb = kappa;
+            float* qvals_ = qvals.data_ptr<float>();
+            system->committor_umb = qvals_[m_mpi_group->getRank()];
             torch_config.requires_grad_();
         };
         ~MySampler(){}; 
