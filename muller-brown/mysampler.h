@@ -61,10 +61,14 @@ class MySampler : public FTSSampler
             //You can add whatever you want here Clay!
             system->DumpXYZBias(dump);
         };
-        void dumpConfigVor()
+        void dumpConfigVor(int rank, const torch::Tensor& voronoi_cell)
         {
             //Do nothing for now
             //You can add whatever you want here Clay!
+            long int vor_sizes[3] = {voronoi_cell.sizes()[0], voronoi_cell.sizes()[1], voronoi_cell.sizes()[2]};
+            system->rank = rank;
+            system->voronoi_cells = voronoi_cell.data_ptr<float>();
+            system->vor_sizes = vor_sizes;
             system->DumpXYZVor();
         };
     private:

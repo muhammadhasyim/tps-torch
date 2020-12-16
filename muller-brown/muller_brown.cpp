@@ -69,7 +69,7 @@ void MullerBrown::GetParams(string name, int rank_in) {
         generator = Saru(seed_base, count_step); 
     }
     // also modify config path
-    config_file.open("string_"+to_string(rank_in)+".xyz", std::ios_base::app);
+    config_file.open("string_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
 }
 
 
@@ -198,6 +198,18 @@ void MullerBrown::MCStepVor() {
         config_dump << "States " << state.x << " " << state.y << " " << state_trial.x << " " << state_trial.y << " phi_diff " << phi_diff << " check " << check << " " << rank << "\n";
     }
     steps_tested++;
+    if((count_step%500==0) && (count_step>0)) {
+        // Adjust lambda for optimal acceptance/rejectance
+        double ratio = double(steps_rejected)/double(steps_tested);
+        if(ratio < 0.5) {
+            lambda *= 1.2;
+        }
+        else if(ratio > 0.7) {
+            lambda *= 0.9;
+        }
+        steps_rejected = 0;
+        steps_tested = 0;
+    }
 }
 
 void MullerBrown::Simulate(int steps) {
@@ -302,9 +314,10 @@ void MullerBrown::DumpXYZVor() {
     ios_base::sync_with_stdio(false);
     // Turns off flushing of out before in
     cin.tie(NULL);
-    config_file << 1 << endl;
+    config_file << 2 << endl;
     config_file << "# step " << count_step << "\n";
     config_file << "0 " << std::scientific << state.x << " " << std::scientific << state.y << " 0\n";
+    config_file << "1 " << std::scientific << voronoi_cells[rank*vor_sizes[2]] << " " << voronoi_cells[rank*vor_sizes[2]+1] << " 0\n";
 }
 
 void MullerBrown::DumpPhi() {
