@@ -37,10 +37,12 @@ class MySampler : public MLSamplerEXP
         //Umbrella potential constant 
         double kappa;
         */
-        MySampler(std::string param_file, const torch::Tensor& config, int rank, int dump, double invkT, double kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+        MySampler(std::string param_file, const torch::Tensor& config, int rank, int dump, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             : MLSamplerEXP(config, mpi_group), system(new MullerBrown())
         {
             //Load parameters during construction
+            invkT = in_invkT;
+            kappa = in_kappa;
             system->GetParams(param_file,rank);
             // Initialize state
             float* state_sys = config.data_ptr<float>();
