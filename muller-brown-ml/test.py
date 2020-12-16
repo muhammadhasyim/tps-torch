@@ -28,7 +28,7 @@ end = torch.tensor([[1.0,1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
-mb_sim = MullerBrown(param="param",config=initializer(alphas[rank],start,end), rank=dist.get_rank(), dump=1, beta=1, kappa=1, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=1, kappa=1, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -55,5 +55,5 @@ from torch.optim import lr_scheduler
 
 #Construct EXPReweightSimulation
 batch_size = 128
-dataset = EXPReweightSimulation(bp_sampler, committor, period=10)
+dataset = EXPReweightSimulation(mb_sim, committor, period=10)
 loader = DataLoader(dataset,batch_size=batch_size)
