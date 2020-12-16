@@ -56,6 +56,7 @@ class MullerBrown(MySampler):
         #Save config size and its flattened version
         self.config_size = config.size()
         self.flattened_size = config.flatten().size()
+        self.torch_config = config
 
     def initialize_from_torchconfig(self, config):
         #by implementation, torch config cannot be structured: it must be a flat 1D tensor
@@ -63,17 +64,19 @@ class MullerBrown(MySampler):
         if config.size() != self.flattened_size:
             raise RuntimeError("Config is not flat! Check implementation")
         else:
-            self.initialize_from_torchconfig(config)
-            if config.size() != self.config_size:
+            self.torch_config = config
+            self.setConfig(self.torch_config)
+            if self.torch_config.size() != self.config_size:
                 raise RuntimeError("New config has inconsistent size compared to previous simulation! Check implementation")
 
     def step(self, committor_val, onlytst=False):
         with torch.no_grad():
-            config_test = torch.zeros_like(self.config)
+            config_test = torch.zeros_like(self.torch_config)
             self.propose(config_test, committor_val, onlytst)
             committor_val_ = self.committor(config_test)
             self.acceptReject(config_test, committor_val_, onlytst, True)
-        self.torch_config = (self.getConfig().flatten()).detach.clone()
+        self.torch_config = (self.getConfig().flatten()).detach().clone()
+        self.torch_config.requires_grad_()
         try:
             self.torch.grad.data.zero_()
         except:
@@ -81,11 +84,12 @@ class MullerBrown(MySampler):
 
     def step_unbiased(self):
         with torch.no_grad():
-            config_test = torch.zeros_like(self.config)
+            config_test = torch.zeros_like(self.torch_config)
             self.propose(config_test, committor_val, onlytst)
             committor_val_ = self.committor(config_test)
             self.acceptReject(config_test, committor_val_, onlytst, False)
-        self.torch_config = (self.getConfig().flatten()).detach.clone()
+        self.torch_config = (self.getConfig().flatten()).detach().clone()
+        self.torch_config.requires_grad_()
         try:
             self.torch.grad.data.zero_()
         except:
@@ -110,8 +114,6 @@ class MullerBrownLoss(CommittorLossEXP):
         #Assume that first dimension is batch dimension
         loss_bc = torch.zeros(1)
         for i, config in enumerate(configs):
-            print("CONFIGS PRINTING")
-            print(config)
             start_ = config-self.start
             start_ = start_.pow(2).sum()**0.5
             end_ = config-self.end

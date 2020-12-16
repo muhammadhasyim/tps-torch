@@ -126,7 +126,7 @@ class MySampler : public MLSamplerEXP
 
         };
         
-        void initialize_from_torchconfig(const torch::Tensor& state)
+        void setConfig(const torch::Tensor& state)
         {
             // I think this is how this works?
             float* state_sys = state.data_ptr<float>();
