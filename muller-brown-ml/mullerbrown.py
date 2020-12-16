@@ -107,8 +107,8 @@ class MullerBrownLoss(CommittorLossEXP):
         loss_bc = torch.zeros(1)
         for i, config in enumerate(configs):
             check = config[0]+config[1]
-            if check <= 0.2:
+            if check <= 0.4:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())**2)*invnormconstants[i]
-            elif check >= 1.8:
+            elif check >= 1.6:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())-1.0)**2*invnormconstants[i]
         return loss_bc/(i+1)

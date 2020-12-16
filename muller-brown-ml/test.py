@@ -28,7 +28,7 @@ end = torch.tensor([[1.0,1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
-mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=100, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -37,7 +37,7 @@ initoptimizer = UnweightedSGD(committor.parameters(), lr=1e-2)#,momentum=0.9,nes
 #from torchsummary import summary
 running_loss = 0.0
 #Initial training try to fit the committor to the initial condition
-for i in tqdm.tqdm(range(10**3)):
+for i in tqdm.tqdm(range(10**5)):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     # forward + backward + optimize
@@ -130,22 +130,24 @@ dataset = TSTValidation(mb_sim, committor, period=20)
 loader = DataLoader(dataset,batch_size=batch_size)
 
 init_config = initializer(0.5)
-mb_sim.setConfig(init_config)
+start = torch.tensor([[0.0,0.0]])
+end = torch.tensor([[1.0,1.0]])
+mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=100, save_config=True, mpi_group = mpi_group, committor=committor)
+#mb_sim.setConfig(init_config)
+#mb_sim = MullerBrown(param="param",config=init_config, rank=dist.get_rank(), dump=1, beta=0.20, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Save validation scores and 
 myval_io = open("{}_validation_{}.txt".format(prefix,dist.get_rank()+1),'w')
-start = torch.tensor([[0.0,0.0]])
-end = torch.tensor([[1.0,1.0]])
 radii = 0.1
 def myprod_checker(config):
     check = config[0]+config[1]
-    if check <= 0.2:
+    if check <= 0.4:
         return True
     else:
         return False
 def myreact_checker(config):
     check = config[0]+config[1]
-    if check >= 1.8:
+    if check >= 1.6:
         return True
     else:
         return False
@@ -160,4 +162,4 @@ for epoch, batch in enumerate(loader):
     
     #Call the validation function
     configs, committor_values = batch
-    dataset.validate(batch, trials=500, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
+    dataset.validate(batch, trials=25, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
