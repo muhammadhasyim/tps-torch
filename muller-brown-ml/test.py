@@ -139,13 +139,13 @@ mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(),
 #Save validation scores and 
 myval_io = open("{}_validation_{}.txt".format(prefix,dist.get_rank()+1),'w')
 radii = 0.1
-def myprod_checker(config):
+def myreact_checker(config):
     check = config[0]+config[1]
     if check <= 0.4:
         return True
     else:
         return False
-def myreact_checker(config):
+def myprod_checker(config):
     check = config[0]+config[1]
     if check >= 1.6:
         return True
