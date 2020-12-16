@@ -67,7 +67,7 @@ void MullerBrown::GetParams(string name, int rank_in) {
         generator = Saru(seed_base, count_step); 
     }
     // also modify config path
-    config_file.open("string_"+to_string(rank_in)+".xyz", std::ios_base::app);
+    config_file.open("string_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
 }
 
 
@@ -149,6 +149,7 @@ void MullerBrown::MCStepBias() {
 }
 
 void MullerBrown::MCStepBiasPropose(float* state_trial, bool onlytst) {
+    generator = Saru(seed_base, count_step++); 
     state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
     state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
     phi = Energy(state);

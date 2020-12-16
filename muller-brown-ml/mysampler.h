@@ -47,7 +47,7 @@ class MySampler : public MLSamplerEXP
             system->state[0][0] = float(state_sys[0]);
             system->state[0][1] = float(state_sys[1]);
             system->dump_sim = dump;
-            system->seed_base = rank;
+            system->seed_base += rank;
             system->temp = 1.0/invkT;
             system->k_umb = kappa;
             torch_config.requires_grad_();
