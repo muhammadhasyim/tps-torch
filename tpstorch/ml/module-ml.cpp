@@ -30,7 +30,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
             );
         };
         
-        virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
+        torch::Tensor computeW(const double& committor_val, const torch::Tensor& q) override
         {
             PYBIND11_OVERRIDE(
                 torch::Tensor, /* Return type */
@@ -42,7 +42,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
             //Might try and raise an error if this base method gets called instead
         };
         
-        virtual torch::Tensor computeC(const double& committor_val) override
+        torch::Tensor computeC(const double& committor_val) override
         {
             PYBIND11_OVERRIDE(
                 torch::Tensor, /* Return type */
@@ -54,7 +54,7 @@ class PyMLSamplerEXP : public MLSamplerEXP
             //Might try and raise an error if this base method gets called instead
         };
         
-        virtual void computeFactors(const double& committor_val) override
+        void computeFactors(const double& committor_val) 
         {
             PYBIND11_OVERRIDE(
                 void, /* Return type */

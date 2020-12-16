@@ -32,9 +32,9 @@ class MullerBrown {
         // Perform Monte Carlo step with bias
         void MCStepBias();
         // Purpose Monte Carlo step
-        float* MCStepBiasPropose();
+        void MCStepBiasPropose(float*, bool);
         // Accept/Reject Monte Carlo step
-        void MCStepBiasAR(float*, float);
+        void MCStepBiasAR(float*, float, bool, bool);
         // Run simulation
         void Simulate(int);
         // Run simulation with bias
