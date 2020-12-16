@@ -8,12 +8,11 @@ import torch.nn as nn
 from tpstorch.ml.optim import project_simplex
 from tpstorch.ml import MLSamplerEXP
 from tpstorch.ml.nn import CommittorLossEXP
+from mullerbrown_ml import MySampler
 import numpy as np
 
 #Import any other thing
 import tqdm, sys
-
-dist.init_process_group(backend='mpi')
 
 class CommittorNet(nn.Module):
     def __init__(self, d, num_nodes, unit=torch.sigmoid):
@@ -46,10 +45,13 @@ class CommittorNet(nn.Module):
 # within function
 # have omnious committor part that actual committor overrides?
 class MullerBrown(MySampler):
-    def __init__(self,param,config,rank,dump,beta,kappa,mpi_group,committor):
+    def __init__(self,param,config,rank,dump,beta,kappa,mpi_group,committor,save_config=False):
         super(MullerBrown, self).__init__(param,config.detach().clone(),rank,dump,beta,kappa,mpi_group)
 
         self.committor = committor
+
+        self.save_config = save_config
+        self.timestep = 0
 
         #Save config size and its flattened version
         self.config_size = config.size()
@@ -61,8 +63,8 @@ class MullerBrown(MySampler):
         if config.size() != self.flattened_size:
             raise RuntimeError("Config is not flat! Check implementation")
         else:
-            self.qt = config.view(-1,1);
-            if self.qt.size() != self.config_size:
+            self.initialize_from_torchconfig(config)
+            if config.size() != self.config_size:
                 raise RuntimeError("New config has inconsistent size compared to previous simulation! Check implementation")
 
     def step(self, committor_val, onlytst=False):
@@ -90,12 +92,19 @@ class MullerBrown(MySampler):
             pass
 
     def save(self):
+        self.timestep += 1
+        if self.save_config:
+            if self.timestep % 100 == 0:
+                self.dumpConfig(0)
 
 
 class MullerBrownLoss(CommittorLossEXP):
-    def __init__(self, lagrange_bc, batch_size):
+    def __init__(self, lagrange_bc, batch_size,start,end,radii):
         super(MullerBrownLoss,self).__init__()
         self.lagrange_bc = lagrange_bc
+        self.start = start
+        self.end = end
+        self.radii = radii
 
     def compute_bc(self, committor, configs, invnormconstants):
         #Assume that first dimension is batch dimension
@@ -103,8 +112,12 @@ class MullerBrownLoss(CommittorLossEXP):
         for i, config in enumerate(configs):
             print("CONFIGS PRINTING")
             print(config)
-            if config.item() <= -1:
+            start_ = config-self.start
+            start_ = start_.pow(2).sum()**0.5
+            end_ = config-self.end
+            end_ = end_.pow(2).sum()**0.5
+            if start_ <= self.radii:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())**2)*invnormconstants[i]
-            if config.item() >= 1:
+            if end_ <= self.radii:
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())-1.0)**2*invnormconstants[i]
         return loss_bc/(i+1)

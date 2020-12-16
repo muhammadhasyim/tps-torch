@@ -7,24 +7,28 @@ import torch.nn as nn
 #Import necessarry tools from tpstorch 
 from tpstorch.ml.data import EXPReweightSimulation, TSTValidation
 from tpstorch.ml.optim import UnweightedSGD, EXPReweightSGD
-from brownian_ml import CommittorNet, BrownianParticle, BrownianLoss
+from torch.distributed import distributed_c10d 
+from mullerbrown import CommittorNet, MullerBrown, MullerBrownLoss
 import numpy as np
+
+dist.init_process_group(backend='mpi')
+mpi_group = dist.distributed_c10d._get_default_group()
 
 #Import any other thing
 import tqdm, sys
 
 prefix = 'simple'
 
+#Initialize neural net
+committor = CommittorNet(d=2,num_nodes=200).to('cpu')
+
 #Set initial configuration and BP simulator
 start = torch.tensor([[0.0,0.0]])
-start = torch.tensor([[1.0,1.0]])
+end = torch.tensor([[1.0,1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
-mb_sim = mb.MySampler("param_test",initializer(alphas[rank],start,end), rank, 0)
-
-#Initialize neural net
-committor = CommittorNet(d=1,num_nodes=200).to('cpu')
+mb_sim = MullerBrown(param="param",config=initializer(alphas[rank],start,end), rank=dist.get_rank(), dump=1, beta=1, kappa=1, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Committor Loss
 initloss = nn.MSELoss()
