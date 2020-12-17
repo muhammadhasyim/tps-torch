@@ -15,18 +15,18 @@ import tqdm, sys
 committor = CommittorNet(d=2,num_nodes=200).to('cpu')
 committor.load_state_dict(torch.load("simple_params_1"))
 
-A= -10
-a = -2
-b = 0
-c = -2
-x = [0,1]
-y = [0,1]
+A = np.array([-20,-10,-17,1.5])
+a = np.array([-1,-1,-6.5,0.7])
+b = np.array([0,0,11,0.6])
+c = np.array([-10,-10,-6.5,0.7])
+x_ = np.array([1,0,-0.5,-1])
+y_ = np.array([0,0.5,1.5,1])
 
-def V(xval,yval):
-    val = 0
-    for i in range(2):
-        val += A*np.exp(a*(xval-x[i])**2+c*(yval-y[i])**2)
-    return val
+def energy(x,y,A,a,b,c,x_,y_):
+    energy_ = np.zeros((x.shape))
+    for i in range(len(A)):
+        energy_ += A[i]*np.exp(a[i]*(x-x_[i])**2+b[i]*(x-x_[i])*(y-y_[i])+c[i]*(y-y_[i])**2)
+    return energy_
 
 def q(xval,yval):
     qvals = np.zeros_like(xval)
@@ -36,14 +36,14 @@ def q(xval,yval):
             Array = torch.from_numpy(Array)
             qvals[i,j] = committor(Array).item()
     return qvals
-nx, ny = 100,100
-X = np.linspace(-1.0, 2.0, nx)
-Y = np.linspace(-1.0, 2.0, ny)
+nx, ny = 150,150
+X = np.linspace(-2.0, 1.5, nx)
+Y = np.linspace(-1.0, 2.5, ny)
 print(X.shape)
 
 xv, yv = np.meshgrid(X, Y)
-z = V(xv,yv)
-h = plt.contourf(X,Y,z)
+z = energy(xv,yv,A,a,b,c,x_,y_)
+h = plt.contourf(X,Y,z,levels=[-15+i for i in range(16)])
 print(np.shape(z),np.shape(xv))
 qvals = q(xv,yv)
 CS = plt.contour(X, Y, qvals,levels=[0.01,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.99])
