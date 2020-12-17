@@ -28,7 +28,7 @@ end = torch.tensor([[1.0,1.0]])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
-mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=100, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=200, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -60,7 +60,7 @@ loader = DataLoader(dataset,batch_size=batch_size)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
 loss = MullerBrownLoss(lagrange_bc = 100.0,batch_size=batch_size,start=start,end=end,radii=0.1)
-optimizer = EXPReweightSGD(committor.parameters(), lr=0.05, momentum=0.90)
+optimizer = EXPReweightSGD(committor.parameters(), lr=0.05, momentum=0.80)
 
 #lr_lambda = lambda epoch : 0.9**epoch
 #scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1, verbose=False)
@@ -125,16 +125,20 @@ for epoch in range(1):
 if dist.get_rank() == 0:
     print("Finished Training! Now performing validation through committor analysis")
 #Construct TSTValidation
+print("Generating transition state")
+for i in range(40000):
+    config_cur = mb_sim.getConfig()
+    mb_sim.step(committor_val=committor(config_cur), onlytst=True)
+
+init_config = mb_sim.getConfig()
+print("q value is "+str(committor(init_config)))
+mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=100, save_config=True, mpi_group = mpi_group, committor=committor)
+#mb_sim.setConfig(init_config)
+#mb_sim = MullerBrown(param="param",config=init_config, rank=dist.get_rank(), dump=1, beta=0.20, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
 batch_size = 100 #batch of initial configuration to do the committor analysis per rank
 dataset = TSTValidation(mb_sim, committor, period=20)
 loader = DataLoader(dataset,batch_size=batch_size)
 
-init_config = initializer(0.5)
-start = torch.tensor([[0.0,0.0]])
-end = torch.tensor([[1.0,1.0]])
-mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.5, kappa=100, save_config=True, mpi_group = mpi_group, committor=committor)
-#mb_sim.setConfig(init_config)
-#mb_sim = MullerBrown(param="param",config=init_config, rank=dist.get_rank(), dump=1, beta=0.20, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Save validation scores and 
 myval_io = open("{}_validation_{}.txt".format(prefix,dist.get_rank()+1),'w')
@@ -162,4 +166,4 @@ for epoch, batch in enumerate(loader):
     
     #Call the validation function
     configs, committor_values = batch
-    dataset.validate(batch, trials=25, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
+    dataset.validate(batch, trials=100, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
