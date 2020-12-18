@@ -133,6 +133,32 @@ void MullerBrown::MCStep() {
     steps_tested++;
 }
 
+void MullerBrown::MCStepSelf() {
+    phi = Energy(state);
+    double2 state_trial;
+    state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
+    state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
+    double phi_ = Energy(state_trial); 
+    double phi_diff = phi_-phi;
+    if(phi_diff < 0) {
+        // accept
+        state.x = state_trial.x;
+        state.y = state_trial.y;
+        phi = phi_;
+    }
+    else if(generator.d() < exp(-phi_diff/temp)) {
+        // still accept, just a little more work
+        state.x = state_trial.x;
+        state.y = state_trial.y;
+        phi = phi_;
+    }
+    else {
+        // reject
+        steps_rejected++;
+    }
+    steps_tested++;
+}
+
 void MullerBrown::MCStepBias() {
     double2 state_trial;
     state_trial.x = state.x + lambda*generator.d(-1.0,1.0);

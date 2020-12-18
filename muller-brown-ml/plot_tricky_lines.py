@@ -1,19 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
-import torch.distributed as dist
-
-dist.init_process_group('mpi')
-#Import necessarry tools from tpstorch 
-from mullerbrown import CommittorNet
-import numpy as np
 
 #Import any other thing
 import tqdm, sys
-
-#Initialize neural net
-committor = CommittorNet(d=2,num_nodes=200).to('cpu')
-committor.load_state_dict(torch.load("simple_params_1"))
 
 A = np.array([-20,-10,-17,1.5])
 a = np.array([-1,-1,-6.5,0.7])
@@ -34,12 +23,19 @@ Y = np.linspace(-1.0, 2.5, ny)
 print(X.shape)
 
 # now plot lines on top of it
+# Another line for the initial path
+r_start = np.array([-1.2,0.9])
+r_end = np.array([-0.5,0.5])
+r_points = np.zeros((16,2))
+for i in range(16):
+    r_points[i,:] = i/15*r_end+(1-i/15)*r_start
 
 xv, yv = np.meshgrid(X, Y)
 z = energy(xv,yv,A,a,b,c,x_,y_)
 h = plt.contourf(X,Y,z,levels=[-15+i for i in range(16)])
 plt.plot(X,X+1)
 plt.plot(X,0.5*(X-1)+2)
+plt.plot(r_points[:,0],r_points[:,1])
 print(np.shape(z),np.shape(xv))
 plt.colorbar()
 plt.show()

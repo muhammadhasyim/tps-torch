@@ -46,6 +46,10 @@ class MySampler : public FTSSampler
             system->SimulateVor(nsteps);
             //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors representing hyperplanes that constrain an MD simulation  
         };
+        void runStep() {
+            // Run a lone step
+            system->MCStepSelf();
+        }
         torch::Tensor getConfig()
         {
             torch::Tensor config = torch::ones(2);
@@ -54,6 +58,13 @@ class MySampler : public FTSSampler
             config[1] = system->state.y;
             //std::cout << config << std::endl;
             return config;
+        };
+        void setConfig(const torch::Tensor& state)
+        {
+            // I think this is how this works?
+            float* state_sys = state.data_ptr<float>();
+            system->state.x = state_sys[0];
+            system->state.y = state_sys[1];
         };
         void dumpConfig(int dump)
         {
