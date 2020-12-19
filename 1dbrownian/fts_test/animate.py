@@ -9,10 +9,10 @@ def V(x):
     return (1-x**2)**2
 
 #I'm going to load the string and brownian particle trajectory here
-num_nodes = 12+2#8
+num_nodes = 11#8
 strings = []
 bp = []
-for i in range(num_nodes-2):
+for i in range(num_nodes):
     strings.append(np.loadtxt("string_{}.xyz".format(i+1)))
     bp.append(np.loadtxt("bp_{}.txt".format(i+1)))
 x = np.linspace(-1.6,1.6)
@@ -20,23 +20,21 @@ x = np.linspace(-1.6,1.6)
 ax.plot(x,V(x),'k-')
 string_plots = ()
 bp_plots = ()
-for j in range(num_nodes-1):
+for j in range(num_nodes):
     line = ax.axvline(0)#0.5*(strings[j][i]+strings[j-1][i]))
     string_plots += (line,)
-    if j < num_nodes-2:
-        line, = ax.plot([],[],'bo',markersize=5)#bp[j-1][i],V(bp[j-1][i]))
-        bp_plots += (line,)
+    line, = ax.plot([],[],'bo',markersize=5)#bp[j-1][i],V(bp[j-1][i]))
+    bp_plots += (line,)
 def animate(i):
     #if i in index:
-    for j in range(num_nodes-1):
-        if j == 0:
-            string_plots[j].set_xdata(0.5*(-1.0+strings[j][i]))
-            bp_plots[j].set_data(bp[j][i],V(bp[j][i]))
-        elif j ==  num_nodes-2:
-            string_plots[j].set_xdata(0.5*(1.0+strings[j-1][i]))
-        elif j < num_nodes-2:
-            string_plots[j].set_xdata(0.5*(strings[j][i]+strings[j-1][i]))
-            bp_plots[j].set_data(bp[j][i],V(bp[j][i]))
+    for j in range(num_nodes):
+        #if j == 0:
+        #    string_plots[j].set_xdata(0.5*(-1.0+strings[j][i]))
+        #elif j ==  num_nodes-2:
+        #    string_plots[j].set_xdata(0.5*(1.0+strings[j-1][i]))
+        #if j > 0:# num_nodes-2:
+        string_plots[j].set_xdata(strings[j][i])#+strings[j-1][i]))
+        bp_plots[j].set_data(bp[j][i],V(bp[j][i]))
     return string_plots+bp_plots
 # Set up formatting for the movie files
 Writer = animation.writers['ffmpeg']

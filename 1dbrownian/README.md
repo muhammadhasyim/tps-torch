@@ -1,10 +1,3 @@
 ## 1dbrownian
 
-An example of running the module on a 1D Brownian Particle example. To run on 6 processes, just do
-
-```console
-mpirun -n 6 python 1dbrownian_test.py
-mpirun -n 6 python 1dbrownian_alttest.py
-```
-
-The other file is for generating animation.
+This folder contains the files needed to run the single particle in 1D Quartic Potential. The folder `fts_test` contains scripts to run the FTS method while the folder `ml_test` runs the PID-BKE algorithm. 
