@@ -11,10 +11,10 @@ import numpy as np
 #Import any other thing
 import tqdm, sys
 
-prefix = 'lowT'
+prefix = 'highT'
 
 #Initialize neural net
-committor = CommittorNet(d=1,num_nodes=200).to('cpu')
+committor = CommittorNet(d=1,num_nodes=100).to('cpu')
 committor.load_state_dict(torch.load("{}_params_1".format(prefix)))
 
 data = np.loadtxt("{}_bp_1.txt".format(prefix))
@@ -44,8 +44,8 @@ def exact(x):
 for val in newx:
     yexact.append(exact(val.item()))
 
-
 import matplotlib.pyplot as plt
+
 plt.figure(figsize=(7,4))
 #Neural net solution vs. exact solution
 plt.subplot(121)
@@ -57,9 +57,22 @@ plt.subplot(122)
 data = np.loadtxt("{}_loss.txt".format(prefix))
 plt.semilogy(data[:,0],data[:,1])
 print(kT)
-#Histogram of particle trajectories
+
+#Plotting Histogram of particle trajectories
 plt.figure(figsize=(7,4))
 for i in range(11):
     data = np.loadtxt("{}_bp_{}.txt".format(prefix,i+1))
-    plt.hist(data[1000::5,0],bins='auto',histtype='step')#x,y)
+    plt.hist(data[100::2,0],bins='auto',histtype='step')#x,y)
+
+#Plot validation result
+"""
+plt.figure(figsize=(5,5))
+for i in range(11):
+    data = np.loadtxt("{}_validation_{}.txt".format(prefix,i+1))
+    plt.errorbar(data[:,0],data[:,1],yerr=data[:,2],ls='None',color='k',marker='o')
+x = np.linspace(0.3,0.7)
+plt.plot(x,x,'--')
+plt.ylim([0.3,0.7])
+plt.xlim([0.3,0.7])
+"""
 plt.show()
