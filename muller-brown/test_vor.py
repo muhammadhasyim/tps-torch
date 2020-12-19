@@ -12,7 +12,9 @@ class CustomFTSMethod(fts.FTSMethodVor):
     def __init__(self,sampler,initial_config,final_config,num_nodes,deltatau,kappa,update_rule):
         super(CustomFTSMethod, self).__init__(sampler,initial_config,final_config,num_nodes,deltatau,kappa,update_rule)
     def dump(self):
-        self.sampler.dumpConfigVor()
+        self.send_strings()
+        voronoi_list = torch.stack(self.voronoi, dim=0)
+        self.sampler.dumpConfigVor(self.rank, voronoi_list)
 
 # cooked up an easy system with basin at [0.0,0.0] and [1.0,1.0]
 start = torch.tensor([[0.0,0.0]])

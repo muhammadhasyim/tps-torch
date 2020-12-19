@@ -191,6 +191,18 @@ void MullerBrown::MCStepBiasAR(float* state_trial, float committor_, bool onlyts
         steps_rejected++;
     }
     steps_tested++;
+    //if((count_step%500==0) && (count_step>0)) {
+        ////Adjust lambda for optimal acceptance/rejectance
+        //double ratio = double(steps_rejected)/double(steps_tested);
+        //if(ratio < 0.5) {
+            //lambda *= 1.2;
+        //}
+        //else if(ratio > 0.7) {
+            //lambda *= 0.8;
+        //}
+        //steps_rejected = 0;
+        //steps_tested = 0;
+    //}
 }
 
 void MullerBrown::Simulate(int steps) {
@@ -251,7 +263,7 @@ void MullerBrown::DumpXYZBias(int dump=0) {
     // Turns off flushing of out before in
     cin.tie(NULL);
     config_file << 1 << endl;
-    config_file << "# step " << count_step << " " << committor;
+    config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
     config_file << "\n";
     config_file << "0 " << std::scientific << state[0][0] << " " << std::scientific << state[0][1] << " 0\n";
 }

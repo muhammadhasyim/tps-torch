@@ -106,9 +106,14 @@ class MullerBrownLoss(CommittorLossEXP):
         #Assume that first dimension is batch dimension
         loss_bc = torch.zeros(1)
         for i, config in enumerate(configs):
-            check = config[0]+config[1]
-            if check <= 0.4:
+            start_ = config-self.start
+            start_ = start_.pow(2).sum()**0.5
+            end_ = config-self.end
+            end_ = end_.pow(2).sum()**0.5
+            #check_1 = config[1]-config[0]
+            #check_2 = config[1]-0.5*config[0]
+            if ((start_ <= self.radii) or (config[1]>0.5*config[0]+1.5)):
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())**2)*invnormconstants[i]
-            elif check >= 1.6:
+            elif ((end_ <= self.radii) or (config[1]<config[0]+0.8)):
                 loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())-1.0)**2*invnormconstants[i]
         return loss_bc/(i+1)

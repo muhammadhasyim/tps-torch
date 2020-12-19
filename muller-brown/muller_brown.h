@@ -37,6 +37,8 @@ class MullerBrown {
         void VoronoiSet();
         // Perform Monte Carlo step
         void MCStep();
+        // Perform Monte Carlo step, energy computed
+        void MCStepSelf();
         // Perform Monte Carlo step with bias
         void MCStepBias();
         // Perform Monte Carlo step with Voronoi
