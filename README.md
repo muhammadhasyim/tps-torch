@@ -2,7 +2,7 @@
 
 A PyTorch-based package for string methods and ML-inspired path sampling methods, as part of EECS 281A final project. 
 
-Before installing and building this project, it is important that you have CMake 2.8.12 above, any MPI implementation (OpenMPI or MPICH), and, of course, PyTorch (v 1.7.0 and above).
+Before installing and building this project, it is important that you have CMake 2.8.12 above, any MPI implementation (OpenMPI or MPICH), and, of course, PyTorch (v 1.7.0 and above). 
 
 At the moment, building and installation is just:
 
@@ -14,6 +14,8 @@ make -j6
 pip install .
 
 ```
+
+Note that the code only supports runs on CPUs. 
 
 Listed files and folders:
 - `tpstorch`, contains C++ and Python source files
