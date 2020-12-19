@@ -14,12 +14,12 @@ def initializer(s):
     return (1-s)*start+s*end
 alphas = torch.linspace(0.0,1,dist.get_world_size()+2)[1:-1]
 
-bp_simulator = BrownianParticle(dt=2e-3,gamma=1.0, kT = 0.4, initial=initializer(alphas[dist.get_rank()]),save_config=True)
+bp_simulator = BrownianParticle(dt=2e-3,gamma=1.0, kT = 0.4, initial=initializer(alphas[dist.get_rank()]),prefix='test',save_config=True)
 fts_method = CustomFTSMethod(sampler=bp_simulator,initial_config=start,final_config=end,num_nodes=dist.get_world_size()+2,deltatau=0.01,kappa=0.01)
 
 import tqdm
-for i in tqdm.tqdm(range(400000)):
+for i in tqdm.tqdm(range(40000)):
     #Run the simulation a single time-step
     fts_method.run(1)
-    if (i % 10 == 0):
+    if i % 10 == 0:
         fts_method.dump(True)

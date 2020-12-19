@@ -51,19 +51,20 @@ class BrownianParticle(FTSSampler):
             self.timestep += 1
 
     #An unbiased simulation run
-    def step(self):
-        self.qt = self.qt-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+    def runUnbiased(self):
+        q0 = self.qt-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+        self.qt = q0.detach().clone()
     
     def getConfig(self):
         return self.qt.detach().clone()
     
     def dumpConfig(self):
         #Update timestep counter
-        self.timestep += 1
+        #self.timestep += 1
         if self.save_config:
-            if self.timestep % 10 == 0:
-                self.qt_io.write("{} {}\n".format(self.qt.item(),1/self.invkT))
-                self.qt_io.flush()
+        #    if self.timestep % 10 == 0:
+            self.qt_io.write("{} {}\n".format(self.qt.item(),1/self.invkT))
+            self.qt_io.flush()
 
 #Override the class and modify the routine which dumps the transition path
 class CustomFTSMethod(AltFTSMethod):

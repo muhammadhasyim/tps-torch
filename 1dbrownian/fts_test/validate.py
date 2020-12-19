@@ -6,11 +6,12 @@ import matplotlib.animation as animation
 #This script simultaneously generate the plots for f(s) and compute scores 
 fig, ax = plt.subplots(figsize=(9,4))
 
+#Define the potential
 def V(x):
     return (1-x**2)**2
 
-num_nodes = 11#8
-
+#Number of nodal points in the path
+num_nodes = 11
 bp = []
 sgamma = []
 kT = 0.4
@@ -19,11 +20,17 @@ yval = []
 yend = 0
 
 plt.subplot(131)
+#Plotting the log of histograms
 for i in range(num_nodes):
-    data = np.loadtxt("_bp_{}.txt".format(i+1))[10:,0]#[1:]#10]
+    #Load the positions of the particle in i-th replica, prune out initial points
+    #and also anything that strays too far from product and reactant states
+    data = np.loadtxt("test_bp_{}.txt".format(i+1))[10:,0]
     data = data[(data >= -1.25) & (data <= 1.25)]
+    
+    #Map the positions to path variables
     s = 0.5*(data+1)
-    hist, bins = np.histogram(s)#100)
+    
+    hist, bins = np.histogram(s)
     center = (bins[:-1] + bins[1:]) / 2
     y =-np.log(hist)
     plt.plot(center,y,'-o')
@@ -31,9 +38,13 @@ plt.ylabel('$-\log[H_\\alpha]$',fontsize=15)
 plt.xlabel('$s$',fontsize=15)
 plt.xlim([0,1])
 
+
+#Plotting G(s), by stitching the histograms with 
 plt.subplot(132)
 for i in range(num_nodes):
-    data = np.loadtxt("_bp_{}.txt".format(i+1))[10:,0]#[1:]#10]
+    #Load the positions of the particle in i-th replica, prune out initial points
+    #and also anything that strays too far from product and reactant states
+    data = np.loadtxt("test_bp_{}.txt".format(i+1))[10:,0]#[1:]#10]
     data = data[(data >= -1.25) & (data <= 1.25)]
     s = 0.5*(data+1)
     #s = s[(s >= 0) & (s <= 1.0)]
@@ -81,7 +92,6 @@ for val in newx:
     ynum.append(numeric(val))
 
 plt.subplot(133)
-#np.savetxt('qdata.txt',ynum)
 plt.plot(0.5*(newx+1),ynum)
 plt.ylabel('$f(s)$',fontsize=15)
 plt.xlabel('$s$',fontsize=15)
@@ -89,18 +99,22 @@ plt.xlim([0,1])
 plt.ylim([0,1])
 plt.tight_layout()
 #plt.savefig('computingfs.pdf',dpi=300)
+plt.show()
 
-#Computing scores here
+#Computing scores for validation test
 score = []
-for i in range(11):
+for i in range(10):
     #Loading up the batch of data generated from the FTS method
-    tse_data = np.loadtxt('batch_fts_{}.txt'.format(i+1))
-    emp_estimate = np.loadtxt('highT_fts_testvalidation_{}.txt'.format(i+1))[:,1]
+    emp_estimate = np.loadtxt('test_validation_{}.txt'.format(i+1))#[:,1]
+    #The third column has the initial configuration used to compute committor
+    tse_data = emp_estimate[:,2]
     for j, xval in enumerate(tse_data):
         try:
             pred = numeric(xval)
-            score.append(np.abs(pred-emp_estimate[j]))
+            score.append(np.abs(pred-emp_estimate[j,0]))
         except:
             break
 score = np.array(score)
+
+#Print out the scores with 99\% confidence interval
 print(1-np.mean(score),2.576*np.std(score)/len(score)**0.5)
