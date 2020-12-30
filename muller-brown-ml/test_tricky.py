@@ -34,31 +34,22 @@ end = torch.tensor([[0.5,0.0]])
 mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=20000, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Generate unbiased configurations in reactant, product regions
-n_boundary_samples = 10
-react_data = torch.zeros(n_boundary_samples*dist.get_world_size(), start.shape[0]*start.shape[1], dtype=torch.float)
-prod_data = torch.zeros(n_boundary_samples*dist.get_world_size(), end.shape[0]*end.shape[1], dtype=torch.float)
+n_boundary_samples = 25
+react_data = torch.zeros(n_boundary_samples, start.shape[0]*start.shape[1], dtype=torch.float)
+prod_data = torch.zeros(n_boundary_samples, end.shape[0]*end.shape[1], dtype=torch.float)
 #Reactant
-mb_sim_react = MullerBrown(param="param",config=start, rank=dist.get_rank(), dump=1, beta=0.025, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim_react = MullerBrown(param="param_tst",config=start, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
 for i in range(n_boundary_samples):
-    for j in range(10000):
+    for j in range(2000):
         mb_sim_react.step_unbiased()
-    react_data[i+n_boundary_samples*dist.get_rank()] = mb_sim_react.getConfig()
+    react_data[i] = mb_sim_react.getConfig()
 
 #Product
-mb_sim_prod = MullerBrown(param="param",config=end, rank=dist.get_rank(), dump=1, beta=0.025, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim_prod = MullerBrown(param="param_tst",config=end, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
 for i in range(n_boundary_samples):
-    for j in range(10000):
+    for j in range(2000):
         mb_sim_prod.step_unbiased()
-    prod_data[i+n_boundary_samples*dist.get_rank()] = mb_sim_prod.getConfig()
-
-#Now communicate
-dist.all_reduce(react_data)
-dist.all_reduce(prod_data)
-if dist.get_rank() == 0:
-    print("REACTANT")
-    print(react_data)
-    print("PRODUCT")
-    print(prod_data)
+    prod_data[i] = mb_sim_prod.getConfig()
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -89,7 +80,9 @@ dataset = EXPReweightSimulation(mb_sim, committor, period=10)
 loader = DataLoader(dataset,batch_size=batch_size)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
-loss = MullerBrownLoss(lagrange_bc = 800.0,batch_size=batch_size,start=start,end=end,radii=0.5)
+loss = MullerBrownLoss(lagrange_bc = 10000.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
+if dist.get_rank() == 0:
+    loss.compute_bc(committor, 0, 0)
 optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
 
 #lr_lambda = lambda epoch : 0.9**epoch
@@ -129,7 +122,7 @@ for epoch in range(1):
             
             #What we need to do now is to compute with its respective weight
             main_loss.mul_(reweight[dist.get_rank()])
-            bc_loss.mul_(reweight[dist.get_rank()])
+            #bc_loss.mul_(reweight[dist.get_rank()])
             
             #All reduce the gradients
             dist.all_reduce(main_loss)
@@ -137,7 +130,7 @@ for epoch in range(1):
 
             #Divide in-place by the mean inverse normalizing constant
             main_loss.div_(meaninvc)
-            bc_loss.div_(meaninvc)
+            #bc_loss.div_(meaninvc)
             
             #Print statistics 
             if dist.get_rank() == 0:

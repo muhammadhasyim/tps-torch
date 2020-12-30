@@ -95,20 +95,26 @@ class MullerBrown(MySampler):
 
 
 class MullerBrownLoss(CommittorLossEXP):
-    def __init__(self, lagrange_bc, batch_size,start,end,radii):
+    def __init__(self, lagrange_bc, batch_size,start,end,radii,world_size,n_boundary_samples,react_configs,prod_configs):
         super(MullerBrownLoss,self).__init__()
         self.lagrange_bc = lagrange_bc
         self.start = start
         self.end = end
         self.radii = radii
+        self.world_size = world_size
+        self.react_configs = react_configs
+        self.prod_configs = prod_configs
 
     def compute_bc(self, committor, configs, invnormconstants):
         #Assume that first dimension is batch dimension
         loss_bc = torch.zeros(1)
-        for i, config in enumerate(configs):
-            check = config[0]+config[1]
-            if check <= 0.4:
-                loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())**2)*invnormconstants[i]
-            elif check >= 1.6:
-                loss_bc += 0.5*self.lagrange_bc*(committor(config.flatten())-1.0)**2*invnormconstants[i]
-        return loss_bc/(i+1)
+        if dist.get_rank() == 0:
+            print(self.react_configs)
+            print(committor(self.react_configs))
+            print(torch.mean(committor(self.react_configs)))
+            print(self.prod_configs)
+            print(committor(self.prod_configs))
+            print(torch.mean(committor(self.prod_configs)))
+        loss_bc += 0.5*self.lagrange_bc*torch.mean(committor(self.react_configs)**2)
+        loss_bc += 0.5*self.lagrange_bc*torch.mean((1.0-committor(self.prod_configs))**2)
+        return loss_bc/self.world_size
