@@ -20,15 +20,45 @@ import tqdm, sys
 prefix = 'simple'
 
 #Initialize neural net
+#Thinking about having Grant's initialization procedure...
 committor = CommittorNet(d=2,num_nodes=200).to('cpu')
 
 #Set initial configuration and BP simulator
-start = torch.tensor([[-0.5,1.5]])
-end = torch.tensor([[0.5,0.0]])
+start = torch.tensor([-1.2,0.9])
+end = torch.tensor([-0.5,0.5])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
-mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=6000, save_config=True, mpi_group = mpi_group, committor=committor)
+start = torch.tensor([[-0.5,1.5]])
+end = torch.tensor([[0.5,0.0]])
+mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=20000, save_config=True, mpi_group = mpi_group, committor=committor)
+
+#Generate unbiased configurations in reactant, product regions
+n_boundary_samples = 10
+react_data = torch.zeros(n_boundary_samples*dist.get_world_size(), start.shape[0]*start.shape[1], dtype=torch.float)
+prod_data = torch.zeros(n_boundary_samples*dist.get_world_size(), end.shape[0]*end.shape[1], dtype=torch.float)
+#Reactant
+mb_sim_react = MullerBrown(param="param",config=start, rank=dist.get_rank(), dump=1, beta=0.025, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+for i in range(n_boundary_samples):
+    for j in range(10000):
+        mb_sim_react.step_unbiased()
+    react_data[i+n_boundary_samples*dist.get_rank()] = mb_sim_react.getConfig()
+
+#Product
+mb_sim_prod = MullerBrown(param="param",config=end, rank=dist.get_rank(), dump=1, beta=0.025, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+for i in range(n_boundary_samples):
+    for j in range(10000):
+        mb_sim_prod.step_unbiased()
+    prod_data[i+n_boundary_samples*dist.get_rank()] = mb_sim_prod.getConfig()
+
+#Now communicate
+dist.all_reduce(react_data)
+dist.all_reduce(prod_data)
+if dist.get_rank() == 0:
+    print("REACTANT")
+    print(react_data)
+    print("PRODUCT")
+    print(prod_data)
 
 #Committor Loss
 initloss = nn.MSELoss()
@@ -59,8 +89,8 @@ dataset = EXPReweightSimulation(mb_sim, committor, period=10)
 loader = DataLoader(dataset,batch_size=batch_size)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
-loss = MullerBrownLoss(lagrange_bc = 100.0,batch_size=batch_size,start=start,end=end,radii=0.2)
-optimizer = EXPReweightSGD(committor.parameters(), lr=0.05, momentum=0.90)
+loss = MullerBrownLoss(lagrange_bc = 800.0,batch_size=batch_size,start=start,end=end,radii=0.5)
+optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
 
 #lr_lambda = lambda epoch : 0.9**epoch
 #scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1, verbose=False)
@@ -132,7 +162,7 @@ for i in range(40000):
 
 init_config = mb_sim.getConfig()
 print("q value is "+str(committor(init_config)))
-mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=6000, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=20000, save_config=True, mpi_group = mpi_group, committor=committor)
 #mb_sim.setConfig(init_config)
 #mb_sim = MullerBrown(param="param",config=init_config, rank=dist.get_rank(), dump=1, beta=0.20, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
 batch_size = 100 #batch of initial configuration to do the committor analysis per rank
@@ -144,16 +174,19 @@ loader = DataLoader(dataset,batch_size=batch_size)
 myval_io = open("{}_validation_{}.txt".format(prefix,dist.get_rank()+1),'w')
 def myprod_checker(config):
     end = torch.tensor([[0.5,0.0]])
-    radii = 0.2
+    end_2 = torch.tensor([[0.0,0.5]])
+    radii = 0.3
     end_ = config-end
     end_ = end_.pow(2).sum()**0.5
-    if ((end_ <= radii) or (config[1]<(config[0]+0.8))):
+    end_2_ = config-end_2
+    end_2_ = end_2_.pow(2).sum()**0.5
+    if ((end_ <= radii) or (end_2_ <= radii) or (config[1]<(config[0]+0.8))):
         return True
     else:
         return False
 def myreact_checker(config):
     start = torch.tensor([[-0.5,1.5]])
-    radii = 0.2
+    radii = 0.3
     start_ = config-start
     start_ = start_.pow(2).sum()**0.5
     if ((start_ <= radii) or (config[1]>(0.5*config[0]+1.5))):
