@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from tpstorch.ml.data import EXPReweightSimulation, TSTValidation
+from tpstorch.ml.data import EXPReweightSimulation, EXPReweightSimulationManual, TSTValidation
 from tpstorch.ml.optim import UnweightedSGD, EXPReweightSGD
 from torch.distributed import distributed_c10d 
 from mullerbrown import CommittorNet, MullerBrown, MullerBrownLoss
@@ -69,18 +69,19 @@ for i in tqdm.tqdm(range(10**5)):
     #Stepping up
     initoptimizer.step()
     #committor.renormalize()
-    committor.project()
+    #committor.project()
 committor.zero_grad()
 
 from torch.optim import lr_scheduler
 
 #Construct EXPReweightSimulation
 batch_size = 128
-dataset = EXPReweightSimulation(mb_sim, committor, period=10)
-loader = DataLoader(dataset,batch_size=batch_size)
+#dataset = EXPReweightSimulation(mb_sim, committor, period=10)
+#loader = DataLoader(dataset,batch_size=batch_size)
+datarunner = EXPReweightSimulationManual(mb_sim, committor, period=10, batch_size=batch_size, dimN=2)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
-loss = MullerBrownLoss(lagrange_bc = 10000.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
+loss = MullerBrownLoss(lagrange_bc = 25.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
 if dist.get_rank() == 0:
     loss.compute_bc(committor, 0, 0)
 optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
@@ -98,12 +99,10 @@ for epoch in range(1):
     if dist.get_rank() == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    for counter, batch in enumerate(loader):
-        if counter > 200:
-            break
+    while actual_counter <= 200:
         
         # get data and reweighting factors
-        config, grad_xs, invc, fwd_wl, bwrd_wl = batch
+        config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -112,7 +111,7 @@ for epoch in range(1):
         cost = loss(grad_xs,committor,config,invc)
         cost.backward()
         meaninvc, reweight = optimizer.step(fwd_weightfactors=fwd_wl, bwrd_weightfactors=bwrd_wl, reciprocal_normconstants=invc)
-        committor.project()
+        #committor.project()
         
         # print statistics
         with torch.no_grad():
@@ -134,7 +133,7 @@ for epoch in range(1):
             
             #Print statistics 
             if dist.get_rank() == 0:
-                print('[{}] loss: {:.5E} penalty: {:.5E} lr: {:.3E}'.format(counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr']))
+                print('[{}] loss: {:.5E} penalty: {:.5E} lr: {:.3E}'.format(actual_counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr']))
                 
                 #Also print the reweighting factors
                 print(reweight)
