@@ -15,13 +15,14 @@ import numpy as np
 import tqdm, sys
 
 class CommittorNet(nn.Module):
-    def __init__(self, d, num_nodes, unit=torch.sigmoid):
+    def __init__(self, d, num_nodes, unit=torch.relu):
         super(CommittorNet, self).__init__()
         self.num_nodes = num_nodes
         self.d = d
         self.unit = unit
         self.lin1 = nn.Linear(d, num_nodes, bias=True)
         self.lin2 = nn.Linear(num_nodes, 1, bias=False)
+        self.thresh = torch.sigmoid
         self.project()
         self.broadcast()
 
@@ -30,6 +31,7 @@ class CommittorNet(nn.Module):
         x = self.lin1(x)
         x = self.unit(x)
         x = self.lin2(x)
+        x = self.thresh(x)
         return x
     
     def broadcast(self):
@@ -104,6 +106,8 @@ class MullerBrownLoss(CommittorLossEXP):
         self.world_size = world_size
         self.react_configs = react_configs
         self.prod_configs = prod_configs
+        self.react_lambda = torch.zeros(1)
+        self.prod_lambda = torch.zeros(1)
 
     def compute_bc(self, committor, configs, invnormconstants):
         #Assume that first dimension is batch dimension
@@ -115,6 +119,12 @@ class MullerBrownLoss(CommittorLossEXP):
             print(self.prod_configs)
             print(committor(self.prod_configs))
             print(torch.mean(committor(self.prod_configs)))
-        loss_bc += 0.5*self.lagrange_bc*torch.mean(committor(self.react_configs)**2)
-        loss_bc += 0.5*self.lagrange_bc*torch.mean((1.0-committor(self.prod_configs))**2)
+        self.react_lambda = self.react_lambda.detach()
+        self.prod_lambda = self.prod_lambda.detach()
+        react_penalty = torch.mean(committor(self.react_configs))
+        prod_penalty = torch.mean(1.0-committor(self.prod_configs))
+        #self.react_lambda -= self.lagrange_bc*react_penalty
+        #self.prod_lambda -= self.lagrange_bc*prod_penalty
+        loss_bc += 0.5*self.lagrange_bc*react_penalty**2-self.react_lambda*react_penalty
+        loss_bc += 0.5*self.lagrange_bc*prod_penalty**2-self.prod_lambda*prod_penalty
         return loss_bc/self.world_size

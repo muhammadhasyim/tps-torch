@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from tpstorch.ml.data import EXPReweightSimulation, EXPReweightSimulationManual, TSTValidation
+from tpstorch.ml.data import EXPReweightSimulation, TSTValidation
 from tpstorch.ml.optim import UnweightedSGD, EXPReweightSGD
 from torch.distributed import distributed_c10d 
 from mullerbrown import CommittorNet, MullerBrown, MullerBrownLoss
@@ -76,9 +76,8 @@ from torch.optim import lr_scheduler
 
 #Construct EXPReweightSimulation
 batch_size = 128
-#dataset = EXPReweightSimulation(mb_sim, committor, period=10)
-#loader = DataLoader(dataset,batch_size=batch_size)
-datarunner = EXPReweightSimulationManual(mb_sim, committor, period=10, batch_size=batch_size, dimN=2)
+dataset = EXPReweightSimulation(mb_sim, committor, period=10)
+loader = DataLoader(dataset,batch_size=batch_size)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
 loss = MullerBrownLoss(lagrange_bc = 25.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
@@ -99,10 +98,12 @@ for epoch in range(1):
     if dist.get_rank() == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    while actual_counter <= 200:
+    for counter, batch in enumerate(loader):
+        if counter > 200:
+            break
         
         # get data and reweighting factors
-        config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
+        config, grad_xs, invc, fwd_wl, bwrd_wl = batch
         
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -133,7 +134,7 @@ for epoch in range(1):
             
             #Print statistics 
             if dist.get_rank() == 0:
-                print('[{}] loss: {:.5E} penalty: {:.5E} lr: {:.3E}'.format(actual_counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr']))
+                print('[{}] loss: {:.5E} penalty: {:.5E} lr: {:.3E}'.format(counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr']))
                 
                 #Also print the reweighting factors
                 print(reweight)

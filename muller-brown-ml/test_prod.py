@@ -26,28 +26,30 @@ committor = CommittorNet(d=2,num_nodes=200).to('cpu')
 #Set initial configuration and BP simulator
 start = torch.tensor([-1.2,0.9])
 end = torch.tensor([-0.5,0.5])
+# start = torch.tensor([[-0.5,1.5]])
+# end = torch.tensor([[0.5,0.0]])
 def initializer(s):
     return (1-s)*start+s*end
 initial_config = initializer(dist.get_rank()/(dist.get_world_size()-1))
 start = torch.tensor([[-0.5,1.5]])
 end = torch.tensor([[0.5,0.0]])
-mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=20000, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param",config=initial_config, rank=dist.get_rank(), dump=1, beta=0.1, kappa=10000, save_config=True, mpi_group = mpi_group, committor=committor)
 
 #Generate unbiased configurations in reactant, product regions
-n_boundary_samples = 25
+n_boundary_samples = 100
 react_data = torch.zeros(n_boundary_samples, start.shape[0]*start.shape[1], dtype=torch.float)
 prod_data = torch.zeros(n_boundary_samples, end.shape[0]*end.shape[1], dtype=torch.float)
 #Reactant
-mb_sim_react = MullerBrown(param="param_tst",config=start, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim_react = MullerBrown(param="param",config=start, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
 for i in range(n_boundary_samples):
-    for j in range(2000):
+    for j in range(500):
         mb_sim_react.step_unbiased()
     react_data[i] = mb_sim_react.getConfig()
 
 #Product
-mb_sim_prod = MullerBrown(param="param_tst",config=end, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim_prod = MullerBrown(param="param",config=end, rank=dist.get_rank(), dump=1, beta=0.1, kappa=0.0, save_config=True, mpi_group = mpi_group, committor=committor)
 for i in range(n_boundary_samples):
-    for j in range(2000):
+    for j in range(500):
         mb_sim_prod.step_unbiased()
     prod_data[i] = mb_sim_prod.getConfig()
 
@@ -58,7 +60,9 @@ initoptimizer = UnweightedSGD(committor.parameters(), lr=1e-2)#,momentum=0.9,nes
 #from torchsummary import summary
 running_loss = 0.0
 #Initial training try to fit the committor to the initial condition
-for i in tqdm.tqdm(range(10**5)):
+for i in range(10**5):
+    if i%1000 == 0:
+        print("Init step "+str(i))
     # zero the parameter gradients
     initoptimizer.zero_grad()
     # forward + backward + optimize
@@ -81,10 +85,11 @@ batch_size = 128
 datarunner = EXPReweightSimulationManual(mb_sim, committor, period=10, batch_size=batch_size, dimN=2)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
-loss = MullerBrownLoss(lagrange_bc = 25.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
+loss = MullerBrownLoss(lagrange_bc = 400.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data)
 if dist.get_rank() == 0:
     loss.compute_bc(committor, 0, 0)
-optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
+#optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
+optimizer = UnweightedSGD(committor.parameters(), lr=0.001, momentum=0.9, nesterov=True)#, weight_decay=1e-3)
 
 #lr_lambda = lambda epoch : 0.9**epoch
 #scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1, verbose=False)
@@ -99,18 +104,37 @@ for epoch in range(1):
     if dist.get_rank() == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    while actual_counter <= 200:
+    while actual_counter <= 20000:
+        # if (actual_counter > 100) and (actual_counter < 10000):
+            # loss.lagrange_bc += 0.01
+            # if dist.get_rank() == 0:
+                # print("lagrange_bc is now "+str(loss.lagrange_bc))
         
         # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
+        # print("CONFIGS")
+        # print(grad_xs.size())
+        # print(config.size())
+        # print(invc.size())
+        # print(fwd_wl.size())
+        # print(bwrd_wl.size())
+        # print("END CONFIGS")
         
         # zero the parameter gradients
         optimizer.zero_grad()
         
         # forward + backward + optimize
-        cost = loss(grad_xs,committor,config,invc)
+        cost = loss(grad_xs,committor,config,invc,fwd_wl,bwrd_wl,invc)
         cost.backward()
-        meaninvc, reweight = optimizer.step(fwd_weightfactors=fwd_wl, bwrd_weightfactors=bwrd_wl, reciprocal_normconstants=invc)
+        # print(cost.size())
+        #print("FACTORS")
+        #print(fwd_wl)
+        #print(bwrd_wl)
+        #print(invc)
+        #meaninvc, reweight = optimizer.step(fwd_weightfactors=fwd_wl, bwrd_weightfactors=bwrd_wl, reciprocal_normconstants=invc)
+        optimizer.step()
+        #print(meaninvc)
+        #print(reweight)
         #committor.project()
         
         # print statistics
@@ -120,23 +144,27 @@ for epoch in range(1):
             bc_loss = loss.bc_loss
             
             #What we need to do now is to compute with its respective weight
-            main_loss.mul_(reweight[dist.get_rank()])
+            #main_loss.mul_(reweight[dist.get_rank()])
             #bc_loss.mul_(reweight[dist.get_rank()])
             
             #All reduce the gradients
-            dist.all_reduce(main_loss)
-            dist.all_reduce(bc_loss)
+            #dist.all_reduce(main_loss)
+            #dist.all_reduce(bc_loss)
 
             #Divide in-place by the mean inverse normalizing constant
-            main_loss.div_(meaninvc)
+            #main_loss.div_(meaninvc)
             #bc_loss.div_(meaninvc)
+            # print("LOSS")
+            # print(main_loss.size())
+            # print(bc_loss.size())
+            # print("END LOSS")
             
             #Print statistics 
             if dist.get_rank() == 0:
                 print('[{}] loss: {:.5E} penalty: {:.5E} lr: {:.3E}'.format(actual_counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr']))
                 
                 #Also print the reweighting factors
-                print(reweight)
+                print(loss.reweight)
                 loss_io.write('{:d} {:.5E} \n'.format(actual_counter+1,main_loss))
                 loss_io.flush()
                 #Only save parameters from rank 0
@@ -154,7 +182,7 @@ for i in range(40000):
 
 init_config = mb_sim.getConfig()
 print("q value is "+str(committor(init_config)))
-mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.025, kappa=20000, save_config=True, mpi_group = mpi_group, committor=committor)
+mb_sim = MullerBrown(param="param_tst",config=init_config, rank=dist.get_rank(), dump=1, beta=0.1, kappa=10000, save_config=True, mpi_group = mpi_group, committor=committor)
 #mb_sim.setConfig(init_config)
 #mb_sim = MullerBrown(param="param",config=init_config, rank=dist.get_rank(), dump=1, beta=0.20, kappa=80, save_config=True, mpi_group = mpi_group, committor=committor)
 batch_size = 100 #batch of initial configuration to do the committor analysis per rank
@@ -196,4 +224,4 @@ for epoch, batch in enumerate(loader):
     
     #Call the validation function
     configs, committor_values = batch
-    dataset.validate(batch, trials=25, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
+    dataset.validate(batch, trials=100, validation_io=myval_io, product_checker=myprod_checker, reactant_checker=myreact_checker)
