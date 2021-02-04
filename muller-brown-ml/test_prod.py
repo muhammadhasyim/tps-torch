@@ -58,7 +58,7 @@ for i in range(n_boundary_samples):
 
 #Committor Loss
 initloss = nn.MSELoss()
-initoptimizer = UnweightedSGD(committor.parameters(), lr=1e-2)#,momentum=0.9,nesterov=True)#, weight_decay=1e-3)
+initoptimizer = UnweightedSGD(committor.parameters(), lr=5e-2)#,momentum=0.9,nesterov=True)#, weight_decay=1e-3)
 
 #from torchsummary import summary
 running_loss = 0.0
@@ -88,7 +88,7 @@ batch_size = 128
 datarunner = EXPReweightSimulationManual(mb_sim, committor, period=10, batch_size=batch_size, dimN=2)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
-loss = MullerBrownLoss(lagrange_bc = 25.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data, committor_start=200, committor_rate=10, final_count=2000, k_committor=100, sim_committor=mb_sim_committor, committor_trials=50)
+loss = MullerBrownLoss(lagrange_bc = 25.0,batch_size=batch_size,start=start,end=end,radii=0.5,world_size=dist.get_world_size(),n_boundary_samples=n_boundary_samples,react_configs=react_data,prod_configs=prod_data, committor_start=200, committor_end=10000, committor_rate=40, final_count=20000, k_committor=100, sim_committor=mb_sim_committor, committor_trials=50, batch_size_bc=0.5, batch_size_cm=0.5)
 if dist.get_rank() == 0:
     loss.compute_bc(committor, 0, 0)
 #optimizer = EXPReweightSGD(committor.parameters(), lr=0.001, momentum=0.90, nesterov=True)
@@ -103,19 +103,30 @@ if dist.get_rank() == 0:
 
 #Training loop
 #1 epoch: 200 iterations, 200 time-windows
+bc_end = 250000
+bc_step_start = 10
+bc_step_end = 10000
+bc_stepsize = (bc_end-loss.lagrange_bc)/(bc_step_end-bc_step_start)
+cm_end = 250000
+cm_step_start = 300
+cm_step_end = 10000
+cm_stepsize = (cm_end-loss.k_committor)/(cm_step_end-cm_step_start)
 for epoch in range(1):
     if dist.get_rank() == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    while actual_counter <= 2000:
-        if (actual_counter > 10) and (actual_counter < 1000):
-            loss.lagrange_bc += 10.0
+    while actual_counter <= 20000:
+        if (actual_counter > bc_step_start) and (actual_counter <= bc_step_end):
+            loss.lagrange_bc += bc_stepsize
             if dist.get_rank() == 0:
                 print("lagrange_bc is now "+str(loss.lagrange_bc))
-        if (actual_counter > 300) and (actual_counter < 1000):
-            loss.k_committor += 5.0
+        if (actual_counter > cm_step_start) and (actual_counter <= cm_step_end):
+            loss.k_committor += cm_stepsize
             if dist.get_rank() == 0:
                 print("k_committor is now "+str(loss.k_committor))
+        if actual_counter == cm_step_end:
+            loss.batch_size_bc = 1.0
+            loss.batch_size_cm = 1.0
 
         
         # get data and reweighting factors

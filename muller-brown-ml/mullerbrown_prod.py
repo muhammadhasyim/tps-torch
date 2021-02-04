@@ -100,15 +100,16 @@ class MullerBrown(MySampler):
 
 
 class MullerBrownLoss(CommittorLossEXP):
-    def __init__(self, lagrange_bc, batch_size,start,end,radii,world_size,n_boundary_samples,react_configs,prod_configs,committor_start,committor_rate,final_count, k_committor, sim_committor, committor_trials, mode="random", ref_index=None, batch_size_bc = 0.5, batch_size_cm = 0.5):
+    def __init__(self, lagrange_bc, batch_size,start,end,radii,world_size,n_boundary_samples,react_configs,prod_configs,committor_start,committor_end,committor_rate,final_count, k_committor, sim_committor, committor_trials, mode="random", ref_index=None, batch_size_bc = 0.5, batch_size_cm = 0.5):
         super(MullerBrownLoss,self).__init__()
         # Committor loss stuff
         self.cm_loss = torch.zeros(1)
         self.committor_start = committor_start
+        self.committor_end = committor_end
         self.final_count = final_count
         self.committor_rate = committor_rate
-        self.committor_configs = torch.zeros(int((self.final_count-self.committor_start)/committor_rate+2),react_configs.shape[1], dtype=torch.float) 
-        self.committor_configs_values = torch.zeros(int((self.final_count-self.committor_start)/committor_rate+2), dtype=torch.float)
+        self.committor_configs = torch.zeros(int((self.committor_end-self.committor_start)/committor_rate+2),react_configs.shape[1], dtype=torch.float) 
+        self.committor_configs_values = torch.zeros(int((self.committor_end-self.committor_start)/committor_rate+2), dtype=torch.float)
         self.committor_configs_count = 0
         self.k_committor = k_committor
         self.sim_committor = sim_committor
@@ -149,8 +150,8 @@ class MullerBrownLoss(CommittorLossEXP):
             # print(torch.mean(committor(self.prod_configs)))
         self.react_lambda = self.react_lambda.detach()
         self.prod_lambda = self.prod_lambda.detach()
-        indices_react = torch.randperm(len(self.react_configs))[:int(0.5*len(self.react_configs))]
-        indices_prod = torch.randperm(len(self.prod_configs))[:int(0.5*len(self.prod_configs))]
+        indices_react = torch.randperm(len(self.react_configs))[:int(self.batch_size_bc*len(self.react_configs))]
+        indices_prod = torch.randperm(len(self.prod_configs))[:int(self.batch_size_bc*len(self.prod_configs))]
         react_penalty = torch.mean(committor(self.react_configs[indices_react,:]))
         prod_penalty = torch.mean(1.0-committor(self.prod_configs[indices_prod,:]))
         #self.react_lambda -= self.lagrange_bc*react_penalty
@@ -265,7 +266,7 @@ class MullerBrownLoss(CommittorLossEXP):
             return loss_cl/self.world_size
         else:
             # Generate new committor configs and keep on generating the loss
-            if(counter%self.committor_rate==0):
+            if counter%self.committor_rate==0 and counter < self.committor_end:
                 # Generate first committor config
                 counts = []
                 for i in range(self.committor_trials):
@@ -288,8 +289,8 @@ class MullerBrownLoss(CommittorLossEXP):
                 self.committor_configs[configs_count] = config.detach().clone()
                 self.committor_configs_count += 1
             # Compute loss
-            indices_committor = torch.randperm(self.committor_configs_count)[:int(0.5*self.committor_configs_count)]
-            if self.committor_configs_count == 0:
+            indices_committor = torch.randperm(self.committor_configs_count)[:int(self.batch_size_cm*self.committor_configs_count)]
+            if self.committor_configs_count == 1:
                 indices_committor = 0
             committor_penalty = torch.mean(committor(self.committor_configs[indices_committor])-self.committor_configs_values[indices_committor])
             print(str(dist.get_rank())+" "+str(committor_penalty))
