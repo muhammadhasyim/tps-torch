@@ -10,7 +10,7 @@ prod_min = np.genfromtxt('prod_min.txt')
 print(react_min)
 print(prod_min)
 radii = 0.025
-rectangle = Rectangle(Point(-1.5,-0.5), Point(1.0,2.0))
+rectangle = Rectangle(Point(-1.75,-0.5), Point(1.25,2.25))
 react_domain = Circle(Point(react_min[0],react_min[1]), radii) 
 prod_domain = Circle(Point(prod_min[0],prod_min[1]), radii) 
 domain = rectangle
@@ -123,8 +123,8 @@ vtkfile << u
 
 # Evaluate points on structured grid
 n_struct = 100
-points_x = np.linspace(-1.5,1.0,n_struct)
-points_y = np.linspace(-0.5,2.0,n_struct)
+points_x = np.linspace(-1.75,1.25,n_struct)
+points_y = np.linspace(-0.5,2.25,n_struct)
 xx, yy = np.meshgrid(points_x,points_y)
 zz = np.zeros_like(xx)
 grad_2_zz = np.zeros_like(xx)
@@ -137,6 +137,9 @@ for i in range(n_struct):
 
 np.savetxt("vertex_values_struct.txt", vertex_values)
 np.savetxt("vertex_coords_struct.txt", coordinates)
+np.savetxt("xx_structured.txt", xx)
+np.savetxt("yy_structured.txt", yy)
+np.savetxt("zz_structured.txt", zz)
 with open('vertex_values_struct.txt', 'w') as outf:
     for i in range(n_struct):
         for j in range(n_struct):
@@ -161,9 +164,31 @@ def energy(x,y,A,a,b,c,x_,y_):
     return energy_
 
 energies = energy(xx,yy,A,a,b,c,x_,y_)
+np.savetxt("energies_structured.txt", grad_2_zz)
+np.savetxt("energies_factor_structured.txt", grad_2_zz*np.exp(-1.0*energies))
 
 from scipy.integrate import simps
 print(simps(simps(grad_2_zz*np.exp(-1.0*energies),points_y),points_x))
+
+# Evaluate weighted gradient
+points = np.zeros((5,2))
+points[0,:] = np.array((-1.0,1.0))
+points[1,:] = np.array((0.0, 0.5))
+points[2,:] = np.array((react_min[0],react_min[1]))
+points[3,:] = np.array((prod_min[0],prod_min[1]))
+points[4,:] = np.array((-0.75,0.6))
+for i in range(5):
+    p = Point(points[i,0],points[i,1])
+    energy_ = energy(points[i,0],points[i,1],A,a,b,c,x_,y_)
+    grad_ = Gu(p)
+    grad_2_ = grad_[0]**2+grad_[1]**2
+    print(points[i,:])
+    print(grad_2_*np.exp(-1.0*energy_))
+
+#Pick out values of quantity to minimize that are of high interest
+values = grad_2_zz*np.exp(-1.0*energies) > 20
+values = values.astype(int)
+np.savetxt("values_of_interest.txt", values, fmt='%d')
 
 #fig, ax = plt.subplots(1,1, figsize = (7.0,2.0), dpi=600)
 h = plt.contourf(xx,yy,energies,levels=[-15+i for i in range(16)])
@@ -174,4 +199,14 @@ plt.clabel(CS, fontsize=10, inline=1)
 plt.tick_params(axis='both', which='major', labelsize=9)
 plt.tick_params(axis='both', which='minor', labelsize=9)
 plt.savefig('committor_fem.pdf', bbox_inches='tight')
+plt.close()
+
+# plot energies
+h = plt.contourf(xx,yy,energies,levels=[-15+i for i in range(16)])
+plt.colorbar()
+CS = plt.contour(xx,yy,grad_2_zz*np.exp(-1.0*energies), cmap='Greys')
+plt.colorbar()
+plt.tick_params(axis='both', which='major', labelsize=9)
+plt.tick_params(axis='both', which='minor', labelsize=9)
+plt.savefig('energies.pdf', bbox_inches='tight')
 plt.close()
