@@ -3,8 +3,8 @@ from torch.utils.data import IterableDataset
 from itertools import cycle
 import tqdm
 import numpy as np
-"""
-class EXPReweightSimulation(IterableDataset):
+
+class OldEXPReweightSimulation(IterableDataset):
     
     def __init__(self, sampler, committor, period):
         ## Store the MD/MC Simulator, which samples our data
@@ -66,7 +66,6 @@ class EXPReweightSimulation(IterableDataset):
     def __iter__(self):
         #Cycle through every period indefinitely
         return cycle(self.runSimulation())
-"""
 
 class EXPReweightSimulation:
     def __init__(self, sampler, committor, period, batch_size, dimN):
@@ -117,7 +116,6 @@ class EXPReweightSimulation:
         bwrd_weightfactor = torch.zeros(self.batch_size, 1)
         for i in range(self.batch_size):
             for j in range(self.period):
-                #print(j,self.sampler.torch_config.grad)
                 #Take one step
                 self.sampler.step(self.out,onlytst=False)
                 
@@ -130,23 +128,15 @@ class EXPReweightSimulation:
                 #Forward pass
                 self.out = self.committor(self.sampler.torch_config)
                 
-                #Compute the first set of reweighting factors from our initial condition
-                #self.sampler.computeFactors(self.out)
-                
-                #Backprop to compute gradients w.r.t. x
-                self.out.backward()
-
-            if torch.sum(torch.isnan(self.out)) > 0:
-                raise ValueError("Committor value is NaN!")
-            else:
-                #Forward pass
-                self.out = self.committor(self.sampler.torch_config)
-                
                 #Compute the new set of reweighting factors from this new step 
                 self.sampler.computeFactors(self.out)
                 
                 #Backprop to compute gradients of x
                 self.out.backward()
+
+            if torch.sum(torch.isnan(self.out)) > 0:
+                raise ValueError("Committor value is NaN!")
+            else:
                 
                 #Compute all for all storage entries
                 configs[i,:] = self.sampler.torch_config
@@ -155,6 +145,9 @@ class EXPReweightSimulation:
                 fwd_weightfactor[i,:] = self.sampler.fwd_weightfactor
                 bwrd_weightfactor[i,:] = self.sampler.bwrd_weightfactor
         
+        #Zero out any gradients in the parameters as the last remaining step
+        self.committor.zero_grad()
+
         return configs, grads, reciprocal_normconstant, fwd_weightfactor, bwrd_weightfactor
 
 
