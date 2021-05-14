@@ -10,7 +10,7 @@ np.random.seed(0)
 
 
 #Initialize neural net
-committor = CommittorNet(d=2,num_nodes=200,beta=1.0).to('cpu')
+committor = CommittorNet(d=2,num_nodes=200,beta=1.0,weight_pde=1.0).to('cpu')
 
 def energy(z):
     A = np.array([-20,-10,-17,1.5])
@@ -96,7 +96,7 @@ for i in range(r_start.shape[0]):
 x = torch.tensor(x, requires_grad=True, dtype=torch.float32)
 
 # optimizer
-optimizer = torch.optim.Adam(committor.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(committor.parameters(), lr=0.05)
 
 # training
 def train(epoch):
@@ -112,7 +112,13 @@ def train(epoch):
     loss_value = loss.item() if not isinstance(loss, float) else loss
     print(f'epoch {epoch}: loss {loss_value:.6f}')
 
-epochs = 5000
+epochs = 1000
+committor.weight_pde = 0.0
+for epoch in range(epochs):
+    train(epoch)
+
+epochs = 1000
+committor.weight_pde = 0.0001
 for epoch in range(epochs):
     train(epoch)
 

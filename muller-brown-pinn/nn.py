@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 
 class CommittorNet(nn.Module):
-    def __init__(self, d, num_nodes, beta, unit=torch.relu):
+    def __init__(self, d, num_nodes, beta, weight_pde, unit=torch.relu):
         super(CommittorNet, self).__init__()
         self.num_nodes = num_nodes
         self.d = d
         self.beta_ = beta
+        self.weight_pde = weight_pde
         self.unit = unit
         self.lin1 = nn.Linear(d, num_nodes, bias=True)
         #self.lin12 = nn.Linear(num_nodes, num_nodes, bias=True)
@@ -56,11 +57,10 @@ class CommittorNet(nn.Module):
         q_y = grad_q[:,1]
         q_xx = torch.autograd.grad(q_x,x, grad_outputs=torch.ones_like(q_x), create_graph=True)[0][:,0]
         q_yy = torch.autograd.grad(q_y,x, grad_outputs=torch.ones_like(q_y), create_graph=True)[0][:,1]
-        term_1 = grad_energy*grad_q
-        term_1 = self.beta_*torch.sum(term_1,axis=1)
+        term_1 = self.beta_*(grad_energy[:,0]*q_x+grad_energy[:,1]*q_y)
         term_2 = q_xx+q_yy
         loss = term_2-term_1
-        return (loss**2).mean()
+        return self.weight_pde*(loss**2).mean()
 
     def loss_bc(self, x_b, u_b):
         q = self.forward(x_b)
