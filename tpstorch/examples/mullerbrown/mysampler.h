@@ -78,7 +78,11 @@ class MySampler : public MLSamplerEXP
             torch::NoGradGuard no_grad_guard;
             return 0.5*kappa*(committor_val-q)*(committor_val-q);
         }
+        void updateQumb(float value)
+        {
+            system->committor_umb = value;//qvals_[m_mpi_group->getRank()];
 
+        }
         //Helper function for computing c(x)
         torch::Tensor computeC(const double& committor_val)
         {
