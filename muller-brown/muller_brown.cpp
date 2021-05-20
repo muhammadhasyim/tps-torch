@@ -189,9 +189,6 @@ void MullerBrown::MCStepBias() {
 }
 
 void MullerBrown::MCStepVor() {
-    ofstream config_dump;
-    config_dump.precision(10);
-    config_dump.open("out_"+to_string(rank), std::ios_base::app);
     double2 state_trial;
     state_trial.x = state.x + lambda*generator.d(-1.0,1.0);
     state_trial.y = state.y + lambda*generator.d(-1.0,1.0);
@@ -220,22 +217,7 @@ void MullerBrown::MCStepVor() {
         // reject
         steps_rejected++;
     }
-    if(count_step%50==0) {
-        config_dump << "States " << state.x << " " << state.y << " " << state_trial.x << " " << state_trial.y << " phi_diff " << phi_diff << " check " << check << " " << rank << "\n";
-    }
     steps_tested++;
-    if((count_step%500==0) && (count_step>0)) {
-        // Adjust lambda for optimal acceptance/rejectance
-        double ratio = double(steps_rejected)/double(steps_tested);
-        if(ratio < 0.5) {
-            lambda *= 1.2;
-        }
-        else if(ratio > 0.7) {
-            lambda *= 0.9;
-        }
-        steps_rejected = 0;
-        steps_tested = 0;
-    }
 }
 
 void MullerBrown::Simulate(int steps) {
@@ -305,6 +287,18 @@ void MullerBrown::SimulateVor(int steps) {
                 state_storage[i/storage_time].x = state.x;
                 state_storage[i/storage_time].y = state.y;
             }
+        }
+        if((count_step%500==0) && (count_step>0)) {
+            // Adjust lambda for optimal acceptance/rejectance
+            double ratio = double(steps_rejected)/double(steps_tested);
+            if(ratio < 0.5) {
+                lambda *= 1.2;
+            }
+            else if(ratio > 0.7) {
+                lambda *= 0.9;
+            }
+            steps_rejected = 0;
+            steps_tested = 0;
         }
     }
 }
