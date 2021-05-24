@@ -305,7 +305,7 @@ class BKELossEXP(_BKELoss):
                  mode='random', ref_index=None):
         super(BKELossEXP, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
                                         start_prod, n_bc_samples, bc_period, batch_size_bc)
-        
+        self.mode = mode 
         if self.mode != 'random':
             if ref_index is not None:
                 self.ref_index = int(ref_index)
@@ -313,7 +313,7 @@ class BKELossEXP(_BKELoss):
                 raise TypeError
     
     @torch.no_grad()
-    def computeZl(self, fwd_weightfactors, bwd_weightfactors):
+    def computeZl(self, fwd_weightfactors, bwrd_weightfactors):
         """Computes the reweighting factor z_L needed for computing gradient
             averages.
             
@@ -347,9 +347,9 @@ class BKELossEXP(_BKELoss):
         zl = []
         for l in range(_world_size):
             if l > self.ref_index:
-                zl.append(torch.prod(fwd_meanwgtfactor[k:l]))
+                zl.append(torch.prod(fwd_meanwgtfactor[self.ref_index:l]))
             elif l < self.ref_index:
-                zl.append(torch.prod(bwrd_meanwgtfactor[l:k]))
+                zl.append(torch.prod(bwrd_meanwgtfactor[l:self.ref_index]))
             else:
                 zl.append(torch.tensor(1.0))
         
@@ -397,17 +397,17 @@ class BKELossEXP(_BKELoss):
             in the computational graph tracked by individual MPI process. The 
             final gradients will be collected in each respective optimizer.
         """
+        main_loss = torch.zeros(1) 
         
         #Compute the first part of the loss
-        main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*invnormconstants.view(-1,1),dim=0));
+        main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*inv_normconstants.view(-1,1),dim=0));
         
         #Computing the reweighting factors, z_l in  our notation
-        self.zl = self.computeZl()
+        self.zl = self.computeZl(fwd_weightfactors, bwrd_weightfactors)
         
         #Use it first to compute the mean inverse normalizing constant 
         mean_recipnormconst = torch.mean(inv_normconstants)
         mean_recipnormconst.mul_(self.zl[_rank])
-        
         #All reduce the mean invnormalizing constant
         dist.all_reduce(mean_recipnormconst)
         
@@ -513,6 +513,7 @@ class BKELossFTS(_BKELoss):
             in the computational graph tracked by individual MPI process. The 
             final gradients will be collected in each respective optimizer.
         """
+        main_loss = torch.zeros(1) 
         
         #Compute the first part of the loss
         main_loss =  0.5*torch.sum(torch.mean(gradients*gradients,dim=0))
