@@ -3,7 +3,7 @@ import numpy as np
 from tpstorch import _rank, _world_size
 
 class FTSSimulation:
-    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count):
+    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count, mode='adaptive'):
         
         ## Store the MD/MC Simulator, which samples our data
         self.sampler = sampler
@@ -35,7 +35,11 @@ class FTSSimulation:
         #Backprop to compute gradients w.r.t. x
         self.out.backward()
         
+        #Minimum number of rejection counts per MPI process
         self.min_count = min_rejection_count
+        
+        #Mode of sampling
+        self.mode = mode
 
     def runSimulation(self):
         ## Create storage entries
@@ -72,33 +76,35 @@ class FTSSimulation:
                 #Compute all for all storage entries
                 configs[i,:] = self.sampler.torch_config
                 grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
-        #Here we check if we have enough rejection counts, 
-        #If we don't, then we need to run the simulation a little longer
-        if _rank == 0:
-            while True:
-                if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
-                    break
-                #Take one step
-                self.sampler.step()
-                #Save config
-                self.sampler.save()       
-        elif _rank == _world_size-1:
-            while True:
-                if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
-                    break
-                #Take one step
-                self.sampler.step()
-                #Save config
-                self.sampler.save()        
-        else:
-            while True:
-                if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
-                    break
-                #Take one step
-                self.sampler.step()
-                #Save config
-                self.sampler.save()        
+        
+        if self.mode == 'adaptive': 
+            #Here we check if we have enough rejection counts, 
+            #If we don't, then we need to run the simulation a little longer
+            if _rank == 0:
+                while True:
+                    if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        break
+                    self.sampler.step()
+                    self.sampler.save()       
+            elif _rank == _world_size-1:
+                while True:
+                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
+                        break
+                    self.sampler.step()
+                    self.sampler.save()        
+            else:
+                while True:
+                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        break
+                    self.sampler.step()
+                    self.sampler.save()        
+        
+            #Next, we look at the number of timesteps taken and see how we can adjust it to sub-sample more uniformly at the next iteration
+            self.period = int(np.round((self.sampler.steps)/self.batch_size))
+        
+        #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
         self.sampler.normalizeRejectionCounts()
+        
 
         #Zero out any gradients in the parameters as the last remaining step
         self.committor.zero_grad()
