@@ -72,7 +72,7 @@ committor.zero_grad()
 #Construct FTSSimulation
 n_boundary_samples = 100
 batch_size = 32
-datarunner = FTSSimulation(mb_sim, committor, period=40, batch_size=batch_size, dimN=2)
+datarunner = FTSSimulation(mb_sim, committor, period=40, batch_size=batch_size, dimN=2,min_rejection_count=1)
 
 #Initialize main loss function and optimizers
 loss = BKELossFTS(  bc_sampler = mb_sim_bc, 
@@ -86,7 +86,7 @@ loss = BKELossFTS(  bc_sampler = mb_sim_bc,
                     batch_size_bc = 0.5)
 
 optimizer = ParallelAdam(committor.parameters(), lr=1e-2)#, momentum=0.90,weight_decay=1e-3
-#optimizer = ParallelSGD(committor.parameters(), lr=1e-2,momentum=0.90,nesterov=True)
+#optimizer = ParallelSGD(committor.parameters(), lr=2e-3,momentum=0.95,nesterov=True)
 ftsoptimizer = FTSUpdate(committor.lin1.parameters(), deltatau=1e-2,momentum=0.9,nesterov=True,kappa=0.1)
 
 loss_io = []
@@ -100,7 +100,7 @@ for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    while actual_counter <= 20000:
+    while actual_counter <= 200:
         #Evaluate the lower and upper committor values bounds
         
         #Before running simulation always re-initialize the list of committor values
