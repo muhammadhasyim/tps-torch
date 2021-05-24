@@ -3,7 +3,7 @@ import numpy as np
 from tpstorch import _rank, _world_size
 
 class FTSSimulation:
-    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count, mode='adaptive'):
+    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count, mode='adaptive', max_period=100):
         
         ## Store the MD/MC Simulator, which samples our data
         self.sampler = sampler
@@ -40,6 +40,9 @@ class FTSSimulation:
         
         #Mode of sampling
         self.mode = mode
+        
+        #Maximum period of sampling, if we are doing adaptive sub-sampling
+        self.max_period = max_period
 
     def runSimulation(self):
         ## Create storage entries
@@ -101,6 +104,10 @@ class FTSSimulation:
         
             #Next, we look at the number of timesteps taken and see how we can adjust it to sub-sample more uniformly at the next iteration
             self.period = int(np.round((self.sampler.steps)/self.batch_size))
+            
+            #See if the new sampling period is larger than what's indicated. If so, we reset to this upper bound.
+            if self.period > self.max_period:
+                self.period = self.max_period
         
         #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
         self.sampler.normalizeRejectionCounts()
