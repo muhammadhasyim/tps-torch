@@ -18,6 +18,7 @@ set(files   __init__.py
                 nn.py
             optim.py
             data.py
+            deprecated.py
     )
 
 foreach(file ${files})

@@ -35,8 +35,6 @@ class MullerBrown {
         void MCStepBiasPropose(float*, bool);
         // Accept/Reject Monte Carlo step
         void MCStepBiasAR(float*, float, bool, bool);
-        
-        void MCStepEnergyWell(float*, const double&);//, bool, bool);
         // Run simulation
         void Simulate(int);
         // Run simulation with bias

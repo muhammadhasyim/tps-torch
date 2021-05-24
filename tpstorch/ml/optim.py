@@ -1,88 +1,125 @@
 import torch
-from torch.optim import Optimizer, SGD
+from torch.optim import Optimizer
 from torch.optim.optimizer import required
-import torch.distributed as dist
+#import torch.distributed as dist
+import torch.optim.functional as F
 
-#A heper function to project a set of vectors into a simplex
-#Unashamedly copied from https://github.com/smatmo/ProjectionOntoSimplex/blob/master/project_simplex_pytorch.py
-def project_simplex(v, z=1.0, axis=-1):
-    """
-    Implements the algorithm in Figure 1 of
-    John Duchi, Shai Shalev-Shwartz, Yoram Singer, Tushar Chandra,
-    "Efficient Projections onto the l1-Ball for Learning in High Dimensions", ICML 2008.
-    https://stanford.edu/~jduchi/projects/DuchiShSiCh08.pdf
-    This algorithm project vectors v onto the simplex w >= 0, \sum w_i = z.
-    :param v: A torch tensor, will be interpreted as a collection of vectors.
-    :param z: Vectors will be projected onto the z-Simplex: \sum w_i = z.
-    :param axis: Indicates the axis of v, which defines the vectors to be projected.
-    :return: w: result of the projection
+from tpstorch import _rank, _world_size
+from tpstorch import dist
+
+class ParallelAdam(Optimizer):
+    r"""Implements Adam algorithm.
+
+    This implementation has an additional step which is to collect gradients computed in different 
+    MPI processes and just average them. This is useful when you're running many unbiased simulations  
+    
+    Any more detailed implementation should be consulted on torch.optim.Adam
     """
 
-    def _project_simplex_2d(v, z):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
+                 weight_decay=0, amsgrad=False):
+        if not 0.0 <= lr:
+            raise ValueError("Invalid learning rate: {}".format(lr))
+        if not 0.0 <= eps:
+            raise ValueError("Invalid epsilon value: {}".format(eps))
+        if not 0.0 <= betas[0] < 1.0:
+            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+        if not 0.0 <= betas[1] < 1.0:
+            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
+        if not 0.0 <= weight_decay:
+            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+        defaults = dict(lr=lr, betas=betas, eps=eps,
+                        weight_decay=weight_decay, amsgrad=amsgrad)
+        super(ParallelAdam, self).__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super(ParallelAdam, self).__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('amsgrad', False)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        """Performs a single optimization step.
+
+        Arguments:
+            closure (callable, optional): A closure that reevaluates the model
+                and returns the loss.
         """
-        Helper function, assuming that all vectors are arranged in rows of v.
-        :param v: NxD torch tensor; Duchi et al. algorithm is applied to each row in vecotrized form
-        :param z: Vectors will be projected onto the z-Simplex: \sum w_i = z.
-        :return: w: result of the projection
-        """
-        with torch.no_grad():
-            shape = v.shape
-            if shape[1] == 1:
-                w = v.clone().detach()
-                w[:] = z
-                return w
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
 
-            mu = torch.sort(v, dim=1)[0]
-            mu = torch.flip(mu, dims=(1,))
-            cum_sum = torch.cumsum(mu, dim=1)
-            j = torch.unsqueeze(torch.arange(1, shape[1] + 1, dtype=mu.dtype, device=mu.device), 0)
-            rho = torch.sum(mu * j - cum_sum + z > 0.0, dim=1, keepdim=True) - 1.
-            max_nn = cum_sum[torch.arange(shape[0],dtype=torch.long), rho[:, 0].type(torch.long)]
-            theta = (torch.unsqueeze(max_nn, -1) - z) / (rho.type(max_nn.dtype) + 1)
-            w = torch.clamp(v - theta, min=0.0)
-            return w
+        for group in self.param_groups:
+            params_with_grad = []
+            grads = []
+            exp_avgs = []
+            exp_avg_sqs = []
+            state_sums = []
+            max_exp_avg_sqs = []
+            state_steps = []
 
-    with torch.no_grad():
-        shape = v.shape
+            for p in group['params']:
+                if p.grad is not None:
+                    params_with_grad.append(p)
+                    if p.grad.is_sparse:
+                        raise RuntimeError('ParallelAdam does not support sparse gradients!')
+                    
+                    #This is the new part from the original Adam implementation
+                    #We just do an all reduce on the gradients
+                    d_p = p.grad
+                    dist.all_reduce(d_p)
+                    
+                    grads.append(d_p)
+                    
+                    state = self.state[p]
+                    # Lazy state initialization
+                    if len(state) == 0:
+                        state['step'] = 0
+                        # Exponential moving average of gradient values
+                        state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        # Exponential moving average of squared gradient values
+                        state['exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        if group['amsgrad']:
+                            # Maintains max of all exp. moving avg. of sq. grad. values
+                            state['max_exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
 
-        if len(shape) == 1:
-            return _project_simplex_2d(torch.unsqueeze(v, 0), z)[0, :]
-        else:
-            axis = axis % len(shape)
-            t_shape = tuple(range(axis)) + tuple(range(axis + 1, len(shape))) + (axis,)
-            tt_shape = tuple(range(axis)) + (len(shape) - 1,) + tuple(range(axis, len(shape) - 1))
-            v_t = v.permute(t_shape)
-            v_t_shape = v_t.shape
-            v_t_unroll = torch.reshape(v_t, (-1, v_t_shape[-1]))
+                    exp_avgs.append(state['exp_avg'])
+                    exp_avg_sqs.append(state['exp_avg_sq'])
 
-            w_t = _project_simplex_2d(v_t_unroll, z)
+                    if group['amsgrad']:
+                        max_exp_avg_sqs.append(state['max_exp_avg_sq'])
 
-            w_t_reroll = torch.reshape(w_t, v_t_shape)
-            return w_t_reroll.permute(tt_shape)
+                    # update the steps for each param group update
+                    state['step'] += 1
+                    # record the step after step update
+                    state_steps.append(state['step'])
 
-#A helper function to compute the un-normalized reweighting factors
-# k, index for reference
-#fwd_meanwgtfactor, a 1D tensor of w_{l+1}/w_{l}, averaged over a mini-batch
-#bwrd_meanwgtfactor, a 1D tensor of w_{l-1}/w_{l}, averaged over a mini-batch
-def computeZl(k,fwd_meanwgtfactor,bwrd_meanwgtfactor):
-    with torch.no_grad():
-        empty = []
-        for l in range(dist.get_world_size()):
-            if l > k:
-                empty.append(torch.prod(fwd_meanwgtfactor[k:l]))
-            elif l < k:
-                empty.append(torch.prod(bwrd_meanwgtfactor[l:k]))
-            else:
-                empty.append(torch.tensor(1.0))
-        return torch.tensor(empty).flatten()
+            beta1, beta2 = group['betas']
+            F.adam(params_with_grad,
+                   grads,
+                   exp_avgs,
+                   exp_avg_sqs,
+                   max_exp_avg_sqs,
+                   state_steps,
+                   group['amsgrad'],
+                   beta1,
+                   beta2,
+                   group['lr'],
+                   group['weight_decay'],
+                   group['eps']
+                   )
+        return loss
 
-class UnweightedSGD(Optimizer):
+
+
+class ParallelSGD(Optimizer):
     r"""Implements stochastic gradient descent (optionally with momentum). 
     
     This implementation has an additional step which is to collect gradients computed in different 
     MPI processes and just average them. This is useful when you're running many unbiased simulations  
     
-    Any more detailed implementation should be consulted on torch.optim.SGD
+    Any more detailed implementation should be consulted on torch.optim.ParallelSGD
     """
 
     def __init__(self, params, sampler=required, lr=required, momentum=0, dampening=0,
@@ -98,10 +135,10 @@ class UnweightedSGD(Optimizer):
                         weight_decay=weight_decay, nesterov=nesterov)
         if nesterov and (momentum <= 0 or dampening != 0):
             raise ValueError("Nesterov momentum requires a momentum and zero dampening")
-        super(UnweightedSGD, self).__init__(params, defaults)
+        super(ParallelSGD, self).__init__(params, defaults)
        
     def __setstate__(self, state):
-        super(UnweightedSGD, self).__setstate__(state)
+        super(ParallelSGD, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
@@ -132,10 +169,9 @@ class UnweightedSGD(Optimizer):
                 #p.grad should be the average of grad(x)/c(x) over the minibatch
                 d_p = p.grad
 
-                #This is the new part from the original SGD implementation
+                #This is the new part from the original ParallelSGD implementation
                 #We just do an all reduce on the gradients
                 dist.all_reduce(d_p)
-                d_p.div_(dist.get_world_size())
                 
                 if weight_decay != 0:
                     d_p = d_p.add(p, alpha=weight_decay)
@@ -155,123 +191,92 @@ class UnweightedSGD(Optimizer):
 
         return loss
 
-
-
-class EXPReweightSGD(Optimizer):
-    r"""Implements stochastic gradient descent (optionally with momentum).
+class FTSUpdate(Optimizer):
+    r"""Implements the Finite-Temperature String Method update. 
     
-    This implementation has an additional step which is reweighting the computed 
-    gradients through free-energy estimation techniques. Currently only implementng
-    exponential averaging (EXP) because it is cheap. 
+    It can be shown that the FTS method update is just stochastic gradient descent. Thus, one can also opt to compute the update with momentum to accelerate convergence. 
     
-    Any more detailed implementation should be consulted on torch.optim.SGD
     """
 
-    def __init__(self, params, sampler=required, lr=required, momentum=0, dampening=0,
-                 weight_decay=0, nesterov=False, mode="random", ref_index=None):
-        if lr is not required and lr < 0.0:
-            raise ValueError("Invalid learning rate: {}".format(lr))
+    def __init__(self, params, sampler=required, deltatau=required, momentum=0, nesterov=False, kappa = 0.1, freeze=False):
+        if deltatau is not required and deltatau < 0.0:
+            raise ValueError("Invalid step size: {}".format(deltatau))
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
-        if weight_decay < 0.0:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
 
-        defaults = dict(lr=lr, momentum=momentum, dampening=dampening,
-                        weight_decay=weight_decay, nesterov=nesterov)
-        if nesterov and (momentum <= 0 or dampening != 0):
-            raise ValueError("Nesterov momentum requires a momentum and zero dampening")
-        super(EXPReweightSGD, self).__init__(params, defaults)
-       
-        #Storing a 1D Tensor of reweighting factors
-        self.reweight = [torch.zeros(1) for i in range(dist.get_world_size())]
-        #Choose whether to sample window references randomly or not
-        self.mode = mode
-        if mode != "random":
-            if ref_index is None or ref_index < 0:
-                raise ValueError("For non-random choice of window reference, you need to set ref_index!")
-            else:
-                self.ref_index = torch.tensor(ref_index)
+        defaults = dict(deltatau=deltatau, momentum=momentum, nesterov=nesterov, kappa=kappa, freeze=freeze)
+        super(FTSUpdate, self).__init__(params, defaults)
+
     def __setstate__(self, state):
-        super(EXPReweightSGD, self).__setstate__(state)
+        super(FTSUpdate, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, closure=None, fwd_weightfactors=required, bwrd_weightfactors=required, reciprocal_normconstants=required):
+    def step(self, configs):
         """Performs a single optimization step.
 
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
         """
-        loss = None
-        if closure is not None:
-            with torch.enable_grad():
-                loss = closure()
 
-        #Average out the batch of weighting factors (unique to each process)
-        #and distribute them across all processes.
-        #TO DO: combine weight factors into a single array so that we have one contigous memory to distribute
-        self.reweight = [torch.zeros(1) for i in range(dist.get_world_size())]
-        fwd_meanwgtfactor = self.reweight.copy()
-        dist.all_gather(fwd_meanwgtfactor,torch.mean(fwd_weightfactors))
-        fwd_meanwgtfactor = torch.tensor(fwd_meanwgtfactor[:-1])
-
-        bwrd_meanwgtfactor = self.reweight.copy()
-        dist.all_gather(bwrd_meanwgtfactor,torch.mean(bwrd_weightfactors))
-        bwrd_meanwgtfactor = torch.tensor(bwrd_meanwgtfactor[1:])
-        
-        #Randomly select a window as a free energy reference and broadcast that index across all processes
-        if self.mode == "random":
-            self.ref_index = torch.randint(low=0,high=dist.get_world_size(),size=(1,))
-            dist.broadcast(self.ref_index, src=0)
-        
-        #Computing the reweighting factors, z_l in  our notation
-        self.reweight = computeZl(self.ref_index.item(),fwd_meanwgtfactor,bwrd_meanwgtfactor)#newcontainer)
-        self.reweight.div_(torch.sum(self.reweight))  #normalize
-        
-        #Use it first to compute the mean inverse normalizing constant
-        mean_recipnormconst = torch.mean(reciprocal_normconstants)#invnormconstants)
-        mean_recipnormconst.mul_(self.reweight[dist.get_rank()])
-
-        #All reduce the mean invnormalizing constant
-        dist.all_reduce(mean_recipnormconst)
         for group in self.param_groups:
-            weight_decay = group['weight_decay']
             momentum = group['momentum']
-            dampening = group['dampening']
+            kappa = group['kappa']
             nesterov = group['nesterov']
+            freeze = group['freeze']
 
             for p in group['params']:
-                if p.grad is None:
-                    continue
+                if p.requires_grad is True:
+                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
 
-                #Gradient of parameters
-                #p.grad should be the average of grad(x)/c(x) over the minibatch
-                d_p = p.grad
-
-                #Multiply with the window's respective reweighting factor
-                d_p.mul_(self.reweight[dist.get_rank()])
+                ## (1) Compute the average configuration
+                avgconfig = torch.zeros_like(p)
+                avgconfig[_rank] = torch.mean(configs,dim=0)
+                dist.all_reduce(avgconfig)
                 
-                #All reduce the gradients
-                dist.all_reduce(d_p)
+                ## (1) Stochastic Gradient Descent
+                d_p = torch.zeros_like(p)
                 
-                #Divide in-place by the mean inverse normalizing constant
-                d_p.div_(mean_recipnormconst)
+                d_p[1:-1] = (p[1:-1]-avgconfig[1:-1])-kappa*_world_size*(p[0:-2]-2*p[1:-1]+p[2:])
+                if freeze is False:
+                    d_p[0] = (p[0]-avgconfig[0])
+                    d_p[-1] = (p[-1]-avgconfig[-1])
                 
-                if weight_decay != 0:
-                    d_p = d_p.add(p, alpha=weight_decay)
                 if momentum != 0:
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
                         buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
                     else:
                         buf = param_state['momentum_buffer']
-                        buf.mul_(momentum).add_(d_p, alpha=1 - dampening)
+                        buf.mul_(momentum).add_(d_p)
                     if nesterov:
                         d_p = d_p.add(buf, alpha=momentum)
                     else:
                         d_p = buf
-                p.add_(d_p, alpha=-group['lr'])
-        
-        return mean_recipnormconst, self.reweight
+
+                p.add_(d_p, alpha=-group['deltatau'])
+                
+                ## (2) Re-parameterization/Projection
+                #Compute the new intermediate nodal variables
+                #which doesn't obey equal arc-length parametrization
+                
+                alpha = torch.linspace(0,1,_world_size)
+                ell_k = torch.norm(p[1:]-p[:-1],dim=1)
+                ellsum = torch.sum(ell_k)
+                ell_k /= ellsum
+                intm_alpha = torch.zeros_like(alpha)
+                for i in range(1, p.shape[0]):
+                    intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
+                
+                #Now interpolate back to the correct parametrization
+                #TO DO: Figure out how to avoid unnecessary copy, i.e., newstring copy
+                index = torch.bucketize(intm_alpha,alpha)
+                newstring = torch.zeros_like(p)
+                for counter, item in enumerate(index[1:-1]):
+                    weight = (alpha[counter+1]-intm_alpha[item-1])/(intm_alpha[item]-intm_alpha[item-1])
+                    newstring[counter+1] = torch.lerp(p[item-1],p[item],weight) 
+                p[1:-1] = newstring[1:-1].detach().clone()
+                del newstring
+                
+                #self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig[1:-1])+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])#-self.deltatau*self.string.grad[1:-1]*(qvals[1:-1]-self.alpha[1:-1].view(-1,1))#penalty
+                #self.string[0] -= self.deltatau*(self.string[0]-self.avgconfig[0])
+                #self.string[-1] -= self.deltatau*(self.string[-1]-self.avgconfig[-1])

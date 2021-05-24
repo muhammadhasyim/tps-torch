@@ -6,6 +6,124 @@
 #include <pybind11/pybind11.h>
 #include <c10d/ProcessGroupMPI.hpp>
 
+class MLSamplerFTS
+{
+    public:
+        //Current configuration of the system as a (flattened) Torch tensor
+        //This is necessarry for layout compatibility with neural net!
+        torch::Tensor torch_config;
+        
+        //List of committor values used to constrain the simulation system. 
+        torch::Tensor committor_list;
+        
+        //Total number of rejections due to going out of the boxes
+        torch::Tensor rejection_count;
+        
+        //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
+        MLSamplerFTS(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+            :   torch_config(config), m_mpi_group(mpi_group)
+        {
+            //Turn on the requires grad by default
+            torch_config.requires_grad_();
+            committor_list = torch::linspace(0,1,mpi_group->getSize()+1);
+            rejection_count = torch::zeros(mpi_group->getSize());
+
+        };
+        virtual ~MLSamplerFTS(){};
+       
+        //Check whether you are in the cell or not 
+        virtual bool checkFTSCell(const double& committor_val, const int& rank_in, const int& world_in)
+        {
+            torch::NoGradGuard no_grad_guard;
+            if( committor_list[rank_in].item<double>() < committor_val && committor_val < committor_list[rank_in+1].item<double>() )
+            {
+                return true;
+            }
+            else
+            {
+                //Check which cell it fell into:
+                for(int i = 0; i < world_in; ++i)
+                {
+                    if(i != rank_in &&  committor_list[i].item<double>() < committor_val && committor_val < committor_list[i+1].item<double>() )
+                    {
+                        rejection_count[i] += 1;
+                        break;
+                    }
+
+                }
+                return false;
+            }
+
+        }
+        
+        //Default time-stepper for doing the biased simulations
+        virtual void step()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        
+        //Default time-stepper for doing the unbiased simulations
+        virtual void step_unbiased()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        
+        //Default time-stepper for collecting samples in either the reactant/product basins
+        virtual void step_bc(bool reactant)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        
+        //Checks whether you are in the product basin
+        virtual bool isProduct(const torch::Tensor& config)
+        { 
+            return true;
+        }; 
+        
+        //Checks whether you are in the product basin
+        virtual bool isReactant(const torch::Tensor& config)
+        {
+            return true;
+        }; 
+        /*
+        virtual void propose()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        virtual void acceptReject()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        virtual void move()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+            //Do nothing for now
+            //Might try and raise an error if this base method gets called instead
+        };
+        */
+        
+        virtual torch::Tensor getConfig()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+            return torch::eye(3);
+        };
+        
+        virtual void setConfig(const torch::Tensor& config)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+
+        virtual void dumpConfig()
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+    protected:
+        //A pointer for the MPI process group used in the current simulation
+        std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
+};
+
+
+
 class MLSamplerEXP
 {
     public:
@@ -43,20 +161,36 @@ class MLSamplerEXP
             torch_config.requires_grad_();
         };
         virtual ~MLSamplerEXP(){};
+        
         //Default time-stepper for doing the biased simulations 
         virtual void step(const double& committor_val, bool onlytst = false)
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
-            //Might try and raise an error if this base method gets called instead
         };
         
+        //Default time-stepper for doing the unbiased simulations
         virtual void step_unbiased()
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
-            //Do nothing for now! The most important thing about this MD simulator is that it needs to take in torch tensors  
-            //Might try and raise an error if this base method gets called instead
         };
+        
+        //Default time-stepper for collecting samples in either the reactant/product basins
+        virtual void step_bc(bool reactant)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        
+        //Checks whether you are in the product basin
+        virtual bool isProduct(const torch::Tensor& config)
+        { 
+            return true;
+        }; 
+        
+        //Checks whether you are in the product basin
+        virtual bool isReactant(const torch::Tensor& config)
+        {
+            return true;
+        }; 
         
         //Helper function for computing umbrella potential
         virtual torch::Tensor computeW(const double& committor_val, const torch::Tensor& q)
@@ -92,6 +226,7 @@ class MLSamplerEXP
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
+        /*
         virtual void runSimulation(int nsteps)
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
@@ -104,6 +239,7 @@ class MLSamplerEXP
             //Do nothing for now
             //Might try and raise an error if this base method gets called instead
         };
+        
         virtual void acceptReject()
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
@@ -116,11 +252,18 @@ class MLSamplerEXP
             //Do nothing for now
             //Might try and raise an error if this base method gets called instead
         };
+        */
         virtual torch::Tensor getConfig()
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");
             return torch::eye(3);
         };
+        
+        virtual void setConfig(const torch::Tensor& config)
+        {
+            throw std::runtime_error("[ERROR] You're calling a virtual method!");
+        };
+        
         virtual void dumpConfig()
         {
             throw std::runtime_error("[ERROR] You're calling a virtual method!");

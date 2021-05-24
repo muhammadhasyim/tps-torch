@@ -205,48 +205,6 @@ void MullerBrown::MCStepBiasAR(float* state_trial, float committor_, bool onlyts
     //}
 }
 
-void MullerBrown::MCStepEnergyWell(float* state_trial, const double& energy_ref) {
-    // Calculate energy difference from bias
-    float phi_ = Energy(state_trial); 
-    float phi_diff = phi_-phi;
-    if (phi_ > energy_ref)
-    {
-        steps_rejected++;
-    }
-    else
-    {
-        if(phi_diff < 0) {
-            // accept
-            state[0][0] = state_trial[0];
-            state[0][1] = state_trial[1];
-            phi = phi_;
-        }
-        else if(generator.d() < exp(-phi_diff/temp)) {
-            // still accept, just a little more work
-            state[0][0] = state_trial[0];
-            state[0][1] = state_trial[1];
-            phi = phi_;
-        }
-        else {
-            // reject
-            steps_rejected++;
-        }
-    steps_tested++;
-    }
-    //if((count_step%500==0) && (count_step>0)) {
-        ////Adjust lambda for optimal acceptance/rejectance
-        //double ratio = double(steps_rejected)/double(steps_tested);
-        //if(ratio < 0.5) {
-            //lambda *= 1.2;
-        //}
-        //else if(ratio > 0.7) {
-            //lambda *= 0.8;
-        //}
-        //steps_rejected = 0;
-        //steps_tested = 0;
-    //}
-}
-
 void MullerBrown::Simulate(int steps) {
     steps_tested = 0;
     steps_rejected = 0;

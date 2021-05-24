@@ -1,0 +1,31 @@
+        /*
+        virtual void propose() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEXP,      /* Parent class */
+                propose,          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for now
+        };
+
+        virtual void acceptReject() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEXP,      /* Parent class */
+                acceptReject,          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for now
+        };
+
+        virtual void move() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEXP,      /* Parent class */
+                move,          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for now
+        };
+        */

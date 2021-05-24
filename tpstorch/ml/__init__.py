@@ -1,7 +1,12 @@
 from . import _ml, optim, nn, data
-from torch.distributed import distributed_c10d 
+from tpstorch import _mpi_group
 
 #Inherit the C++ compiled sampler class, and add the MPI process group by default
 class MLSamplerEXP(_ml.MLSamplerEXP):
     def __init__(self, initial_config):
-        super(MLSamplerEXP,self).__init__(initial_config, distributed_c10d._get_default_group())
+        super(MLSamplerEXP,self).__init__(initial_config, _mpi_group)
+
+#Inherit the C++ compiled sampler class, and add the MPI process group by default
+class MLSamplerFTS(_ml.MLSamplerFTS):
+    def __init__(self, initial_config):
+        super(MLSamplerFTS,self).__init__(initial_config, _mpi_group)

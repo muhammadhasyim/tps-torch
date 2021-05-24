@@ -1,4 +1,4 @@
-set(SUBCOMPONENT_NAME mullerbrown)
+set(SUBCOMPONENT_NAME mullerbrown_ml)
 
 #### Add C++ Source Files
 set(_${SUBCOMPONENT_NAME}_sources
@@ -31,8 +31,8 @@ MACRO(copy_header file)
         OUTPUT ${file}
         POST_BUILD
         COMMAND    ${CMAKE_COMMAND}
-        ARGS       -E copy ${CMAKE_CURRENT_SOURCE_DIR}/${file} ${CMAKE_CURRENT_BINARY_DIR}/../include/tpstorch/examples/mullerbrown/${file}
-        COMMENT    "Copy tpstorch/include/tpstorch/examples/mullerbrown/${file}"
+        ARGS       -E copy ${CMAKE_CURRENT_SOURCE_DIR}/${file} ${CMAKE_CURRENT_BINARY_DIR}/../include/tpstorch/examples/mullerbrown_ml/${file}
+        COMMENT    "Copy tpstorch/include/tpstorch/examples/mullerbrown_ml/${file}"
     )
 ENDMACRO(copy_header)
 
