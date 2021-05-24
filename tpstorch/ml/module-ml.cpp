@@ -163,6 +163,15 @@ class PyMLSamplerFTS : public MLSamplerFTS
             );
         };
         
+        virtual void normalizeRejectionCounts() override
+        {
+        PYBIND11_OVERRIDE(
+            void, /* Return type */
+            MLSamplerFTS,      /* Parent class */
+            normalizeRejectionCounts,          /* Name of function in C++ (must match Python name) */
+            );
+        };
+        
         virtual void step_bc(bool reactant) override
         {
         PYBIND11_OVERRIDE_PURE(
@@ -263,6 +272,7 @@ void export_MLSamplerFTS(py::module& m)
     .def("step_unbiased", &MLSamplerFTS::step_unbiased)
     .def("step_bc", &MLSamplerFTS::step_bc)
     .def("checkFTSCell", &MLSamplerFTS::checkFTSCell)
+    .def("normalizeRejectionCounts", &MLSamplerFTS::normalizeRejectionCounts)
     .def("step_unbiased", &MLSamplerFTS::step_unbiased)
     //.def("runSimulation", &MLSamplerFTS::runSimulation)
     //.def("propose", &MLSamplerFTS::propose)
@@ -273,6 +283,7 @@ void export_MLSamplerFTS(py::module& m)
     .def("getConfig", &MLSamplerFTS::getConfig)
     .def("dumpConfig", &MLSamplerFTS::dumpConfig)
     .def_readwrite("torch_config", &MLSamplerFTS::torch_config)
+    .def_readwrite("steps", &MLSamplerFTS::steps)
     .def_readwrite("committor_list", &MLSamplerFTS::committor_list)
     .def_readwrite("rejection_count", &MLSamplerFTS::rejection_count)
     ;

@@ -12,6 +12,18 @@ from tpstorch import _rank, _world_size
 from tpstorch import dist
 
 
+from numpy.linalg import svd
+
+#Helper function to obtain null space
+def nullspace(A, atol=1e-13, rtol=0):
+    A = np.atleast_2d(A)
+    u, s, vh = svd(A)
+    tol = max(atol, rtol * s[0])
+    nnz = (s >= tol).sum()
+    ns = vh[nnz:].conj().T
+    ss = s[nnz:]
+    return ns, ss
+
 class FTSLayer(nn.Module):
     r""" A linear layer, where the paramaters correspond to the string obtained by the 
         general FTS method. 
@@ -47,7 +59,11 @@ class CommittorLoss(_Loss):
 
         Args:
             cl_sampler (tpstorch.MLSampler): the MC/MD sampler to perform unbiased simulations.
+            
+            committor (tpstorch.nn.Module): the committor function, represented as a neural network. 
+            
             lambda_cl (float): the penalty strength of the MSE loss. Defaults to one. 
+            
             cl_start (int): iteration number where we start collecting samples for the committor loss. 
 
             cl_end (int): iteration number where we stop collecting samples for the committor loss
@@ -58,10 +74,12 @@ class CommittorLoss(_Loss):
 
             batch_size_cl (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
     """
-    def __init__(self, cl_sampler, lambda_cl=1.0, cl_start=200, cl_end=2000000, cl_rate=100, cl_trials=50, batch_size_cl=0.5):
+    def __init__(self, cl_sampler, committor, lambda_cl=1.0, cl_start=200, cl_end=2000000, cl_rate=100, cl_trials=50, batch_size_cl=0.5):
+        super(CommittorLoss, self).__init__()
         
         self.cl_loss = torch.zeros(1)
-        
+        self.committor = committor 
+
         self.cl_sampler = cl_sampler
         self.cl_start = cl_start
         self.cl_end = cl_end
@@ -70,30 +88,33 @@ class CommittorLoss(_Loss):
         self.cl_trials = cl_trials
         self.batch_size_cl = batch_size_cl
         
-        self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[1], dtype=torch.float) 
+        if cl_sampler.torch_config.shape == torch.Size([1]):
+            self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[0], dtype=torch.float) 
+        else:
+            self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[1], dtype=torch.float) 
         self.cl_configs_values = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), dtype=torch.float)
         self.cl_configs_count = 0
     
     def runTrials(self, config):
         counts = []
+        
         for i in range(self.cl_trials):
             self.cl_sampler.initialize_from_torchconfig(config.detach().clone())
             hitting = False
-            
             #Run simulation and stop until it falls into the product or reactant state
             steps = 0
             while hitting is False:
-                if self.cl_sampler.isReactant():
+                if self.cl_sampler.isReactant(self.cl_sampler.getConfig()):
                     hitting = True
                     counts.append(0)
-                elif self.cl_sampler.isProduct():
+                elif self.cl_sampler.isProduct(self.cl_sampler.getConfig()):
                     hitting = True
                     counts.append(1)
                 self.cl_sampler.step_unbiased()
                 steps += 1
-            return np.array(counts)
+        return np.array(counts)
     
-    def forward(self, counter, initial_config):
+    def compute_cl(self,counter,initial_config):
         """Computes the committor loss function 
             TO DO: Complete this docstrings 
         """
@@ -103,42 +124,45 @@ class CommittorLoss(_Loss):
         if ( counter < self.cl_start):
             #Not the time yet to compute the committor loss
             return loss_cl
-        elif (counter==self.committor_start):
+        elif (counter==self.cl_start):
             
             #Generate the first committor sample
             counts = self.runTrials(initial_config)
             print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
             
             #Save the committor values and initial configuration 
-            self.committor_configs_values[0] = np.mean(counts) 
-            self.committor_configs[0] = initial_config.detach().clone()
-            self.committor_configs_count += 1
+            self.cl_configs_values[0] = np.mean(counts) 
+            self.cl_configs[0] = initial_config.detach().clone()
+            self.cl_configs_count += 1
             
             # Now compute loss
-            committor_penalty = torch.mean((committor(self.committor_configs[0])-self.committor_configs_values[0])**2)
-            loss_cl += 0.5*self.k_committor*committor_penalty
-            return loss_cl/self.world_size
+            committor_penalty = torch.mean((self.committor(self.cl_configs[0])-self.cl_configs_values[0])**2)
+            loss_cl += 0.5*self.lambda_cl*committor_penalty
+            return loss_cl/_world_size
         else:
-            if counter % self.committor_rate==0 and counter < self.committor_end:
+            if counter % self.cl_rate==0 and counter < self.cl_end:
                 # Generate new committor configs and keep on generating the loss
                 counts = self.runTrials(initial_config)
                 print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
-                configs_count = self.committor_configs_count
-                self.committor_configs_values[configs_count] = np.mean(counts) 
-                self.committor_configs[configs_count] = initial_config.detach().clone()
-                self.committor_configs_count += 1
+                configs_count = self.cl_configs_count
+                self.cl_configs_values[configs_count] = np.mean(counts) 
+                self.cl_configs[configs_count] = initial_config.detach().clone()
+                self.cl_configs_count += 1
             
             # Compute loss by sub-sampling however many batches we have at the moment
-            indices_committor = torch.randperm(self.committor_configs_count)[:int(self.batch_size_cm*self.committor_configs_count)]
-            if self.committor_configs_count == 1:
+            indices_committor = torch.randperm(self.cl_configs_count)[:int(self.batch_size_cl*self.cl_configs_count)]
+            if self.cl_configs_count == 1:
                 indices_committor = 0
-            committor_penalty = torch.mean((committor(self.committor_configs[indices_committor])-self.committor_configs_values[indices_committor])**2)
-            loss_cl += 0.5*self.k_committor*committor_penalty
+            committor_penalty = torch.mean((self.committor(self.cl_configs[indices_committor])-self.cl_configs_values[indices_committor])**2)
+            loss_cl += 0.5*self.lambda_cl*committor_penalty
             
             #Collect all the results
             dist.all_reduce(loss_cl)
-            
             return loss_cl/_world_size
+    
+    def forward(self, counter, initial_config):
+        self.cl_loss = self.compute_cl(counter, initial_config)
+        return self.cl_loss
 
 
 class _BKELoss(_Loss):
@@ -479,12 +503,15 @@ class BKELossFTS(_BKELoss):
         
         #All reduce to collect the results
         dist.all_reduce(Kmatrix)
+        
         #Finallly, build the final matrix
         Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))
         
         #Compute the reweighting factors using an eigensolver
-        w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
-        zl = np.real(v[:,0])
+        #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
+        v, w = nullspace(Kmatrix.numpy(), atol=1e-6, rtol=0)
+        index = np.argmin(w)
+        zl = np.real(v[:,index])
         
         #Normalize
         zl = zl/np.sum(zl)  

@@ -19,6 +19,8 @@ class MLSamplerFTS
         //Total number of rejections due to going out of the boxes
         torch::Tensor rejection_count;
         
+        //Total number of steps taken during simulation
+        double steps; 
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerFTS(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             :   torch_config(config), m_mpi_group(mpi_group)
@@ -27,6 +29,7 @@ class MLSamplerFTS
             torch_config.requires_grad_();
             committor_list = torch::linspace(0,1,mpi_group->getSize()+1);
             rejection_count = torch::zeros(mpi_group->getSize());
+            steps = 0.0;
 
         };
         virtual ~MLSamplerFTS(){};
@@ -34,6 +37,7 @@ class MLSamplerFTS
         //Check whether you are in the cell or not 
         virtual bool checkFTSCell(const double& committor_val, const int& rank_in, const int& world_in)
         {
+            steps += 1.0;
             torch::NoGradGuard no_grad_guard;
             if( committor_list[rank_in].item<double>() < committor_val && committor_val < committor_list[rank_in+1].item<double>() )
             {
@@ -54,8 +58,12 @@ class MLSamplerFTS
                 return false;
             }
 
-        }
+        };
         
+       virtual void normalizeRejectionCounts()
+       {
+           rejection_count.div_(steps);
+       }; 
         //Default time-stepper for doing the biased simulations
         virtual void step()
         {

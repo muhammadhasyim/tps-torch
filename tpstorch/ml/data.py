@@ -1,8 +1,9 @@
 import torch
 import numpy as np
+from tpstorch import _rank, _world_size
 
 class FTSSimulation:
-    def __init__(self, sampler, committor, period, batch_size, dimN):
+    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count):
         
         ## Store the MD/MC Simulator, which samples our data
         self.sampler = sampler
@@ -33,6 +34,8 @@ class FTSSimulation:
         
         #Backprop to compute gradients w.r.t. x
         self.out.backward()
+        
+        self.min_count = min_rejection_count
 
     def runSimulation(self):
         ## Create storage entries
@@ -45,13 +48,14 @@ class FTSSimulation:
         
         
         for i in range(self.batch_size):
+            
             for j in range(self.period):
                 #Take one step
                 self.sampler.step()
                 
                 #Save config
                 self.sampler.save()        
-                
+            
             #No more backprop because gradients will never be needed during sampling
             #Zero out any gradients
             self.committor.zero_grad()
@@ -68,7 +72,34 @@ class FTSSimulation:
                 #Compute all for all storage entries
                 configs[i,:] = self.sampler.torch_config
                 grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
-        
+        #Here we check if we have enough rejection counts, 
+        #If we don't, then we need to run the simulation a little longer
+        if _rank == 0:
+            while True:
+                if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                    break
+                #Take one step
+                self.sampler.step()
+                #Save config
+                self.sampler.save()       
+        elif _rank == _world_size-1:
+            while True:
+                if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
+                    break
+                #Take one step
+                self.sampler.step()
+                #Save config
+                self.sampler.save()        
+        else:
+            while True:
+                if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                    break
+                #Take one step
+                self.sampler.step()
+                #Save config
+                self.sampler.save()        
+        self.sampler.normalizeRejectionCounts()
+
         #Zero out any gradients in the parameters as the last remaining step
         self.committor.zero_grad()
 
