@@ -3,7 +3,7 @@ import numpy as np
 from tpstorch import _rank, _world_size
 
 class FTSSimulation:
-    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count, mode='adaptive', max_period=100):
+    def __init__(self, sampler, committor, period, batch_size, dimN, min_rejection_count, mode='adaptive', max_period=np.inf):
         
         ## Store the MD/MC Simulator, which samples our data
         self.sampler = sampler
