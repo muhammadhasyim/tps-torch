@@ -170,6 +170,9 @@ class FTSCommittorLoss(_Loss):
         b = np.zeros(_world_size-2)
         b[-1] = -zl[-1]
         qalpha[1:-1] = torch.from_numpy(scipy.linalg.solve(a=eGalpha.numpy(),b=b)) 
+        dist.barrier()
+        if _rank == 0:
+            print("Estimated committor values: \n {}".format(qalpha.numpy()))
         return qalpha[_rank]
     
     def compute_fts(self,counter, strings):#,initial_config):
