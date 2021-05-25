@@ -6,13 +6,14 @@ import torch.nn.functional as F
 import numpy as np
 
 from torch.nn.modules.loss import _Loss
-import scipy.sparse.linalg
+#import scipy.sparse.linalg
 
 from tpstorch import _rank, _world_size
 from tpstorch import dist
 
 
 from numpy.linalg import svd
+import scipy.linalg
 
 #Helper function to obtain null space
 def nullspace(A, atol=1e-13, rtol=0):
@@ -50,6 +51,180 @@ class FTSLayer(nn.Module):
         bias = -torch.sum(0.5*(self.string[1:]+self.string[:-1])*(self.string[1:]-self.string[:-1]),dim=1)
         
         return torch.add(w_times_x, bias)
+
+class FTSCommittorLoss(_Loss):
+    r"""Loss function which implements the MSE loss for the committor function. 
+        
+        This loss function automatically collects the approximate values of the committor around a string.
+
+        Args:
+            fts_sampler (tpstorch.MLSampler): the MC/MD sampler to perform biased simulations in the string.
+            
+            lambda_fts (float): the penalty strength of the MSE loss. Defaults to one. 
+            
+            fts_start (int): iteration number where we start collecting samples for the committor loss. 
+
+            fts_end (int): iteration number where we stop collecting samples for the committor loss
+
+            fts_rate (int): sampling rate for collecting committor samples during the iterations. 
+
+            fts_max_steps (int): number of maximum timesteps to compute the committor per initial configuration.
+            
+            fts_min_count (int): minimum number of rejection counts before we stop the simulation. 
+
+            batch_size_fts (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
+    """
+    def __init__(self, fts_sampler, committor, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5):
+        super(FTSCommittorLoss, self).__init__()
+        
+        self.fts_loss = torch.zeros(1)
+        self.committor = committor
+
+        self.fts_sampler = fts_sampler
+        self.fts_start = fts_start
+        self.fts_end = fts_end
+        self.lambda_fts = lambda_fts
+        self.fts_rate = fts_rate
+        self.batch_size_fts = batch_size_fts
+        
+        if fts_sampler.torch_config.shape == torch.Size([1]):
+            self.fts_configs = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dimN, dtype=torch.float) 
+        else:
+            self.fts_configs = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dimN, dtype=torch.float) 
+        self.fts_configs_values = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dtype=torch.float)
+        self.fts_configs_count = 0
+    
+        self.min_count = fts_min_count
+        self.max_steps = fts_max_steps
+
+    def runSimulation(self, strings):
+        with torch.no_grad():
+            #Initialize
+            self.fts_sampler.committor_list[0] = 0.0
+            self.fts_sampler.committor_list[-1] = 1.0
+            for i in range(_world_size):
+                self.fts_sampler.rejection_count[i] = 0
+                if i > 0:
+                    self.fts_sampler.committor_list[i]= self.committor(0.5*(strings[i-1]+strings[i])).item()
+            inftscell = self.fts_sampler.checkFTSCell(self.committor(self.fts_sampler.getConfig().flatten()), _rank, _world_size)
+            if inftscell:
+                pass
+            else:
+                self.fts_sampler.setConfig(strings[_rank])
+            
+            for i in range(self.max_steps):
+                self.fts_sampler.step()
+                #Here we check if we have enough rejection counts, 
+                #If we don't, then we need to run the simulation a little longer
+                if _rank == 0 and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        break
+                elif _rank == _world_size-1 and self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count:
+                        break
+                elif self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        break
+            #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
+            self.fts_sampler.normalizeRejectionCounts()
+    
+    @torch.no_grad()
+    def compute_qalpha(self):
+    #def computeZl(self,rejection_counts):
+        """ Computes the reweighting factor z_l by solving an eigenvalue problem
+            
+            Args:
+                rejection_counts (torch.Tensor): an array of rejection counts, i.e., how many times
+                a system steps out of its cell in the FTS smulation, stored by an MPI process. 
+            
+            Formula and maths is based on our paper. 
+        """
+        qalpha = torch.linspace(0,1,_world_size)
+        #Set the row according to rank
+        Kmatrix = torch.zeros(_world_size,_world_size)
+        Kmatrix[_rank] = self.fts_sampler.rejection_count
+        
+        #All reduce to collect the results
+        dist.all_reduce(Kmatrix)
+        
+        #Finallly, build the final matrix
+        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))
+        
+        #Compute the reweighting factors using an eigensolver
+        #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
+        v, w = nullspace(Kmatrix.numpy(), atol=1e-6, rtol=0)
+        index = np.argmin(w)
+        zl = np.real(v[:,index])
+        
+        #Normalize
+        zl = zl/np.sum(zl)  
+        
+        #Alright, now compute approximate committor values around the string
+        #Build a new matrix
+        eGalpha = torch.zeros(_world_size-2,_world_size-2)
+        if _rank > 0 and _rank < _world_size-1:
+            i = _rank-1
+            eGalpha[i,i] = float(-zl[_rank-1]-zl[_rank+1])
+            if i != 0:
+                eGalpha[i,i-1] = float(zl[_rank-1])
+            if i != _world_size-3:
+                eGalpha[i,i+1] = float(zl[_rank+1])
+        dist.all_reduce(eGalpha)
+        b = np.zeros(_world_size-2)
+        b[-1] = -zl[-1]
+        qalpha[1:-1] = torch.from_numpy(scipy.linalg.solve(a=eGalpha.numpy(),b=b)) 
+        return qalpha[_rank]
+    
+    def compute_fts(self,counter, strings):#,initial_config):
+        """Computes the committor loss function 
+            TO DO: Complete this docstrings 
+        """
+        #Initialize loss to zero
+        loss_fts = torch.zeros(1)
+        
+        if ( counter < self.fts_start):
+            #Not the time yet to compute the committor loss
+            return loss_fts
+        elif (counter==self.fts_start):
+            
+            #Generate the first committor sample
+            self.runSimulation(strings)
+            print("Rank [{}] finishes simulation for committor calculation".format(_rank))
+            
+            #Save the committor values and initial configuration 
+            self.fts_configs_values[0] = self.compute_qalpha()
+            self.fts_configs[0] = strings[_rank].detach().clone()
+            self.fts_configs_count += 1
+            
+            # Now compute loss
+            committor_penalty = torch.mean((self.committor(self.fts_configs[0])-self.fts_configs_values[0])**2)
+            loss_fts += 0.5*self.lambda_fts*committor_penalty
+            
+            #Collect all the results
+            dist.all_reduce(loss_fts)
+            
+            return loss_fts/_world_size
+        else:
+            if counter % self.fts_rate==0 and counter < self.fts_end:
+                # Generate new committor configs and keep on generating the loss
+                self.runSimulation(strings)
+                print("Rank [{}] finishes simulation for committor calculation".format(_rank))
+                configs_count = self.fts_configs_count
+                self.fts_configs_values[configs_count] = self.compute_qalpha()
+                self.fts_configs[configs_count] = strings[_rank].detach().clone()
+                self.fts_configs_count += 1
+            
+            # Compute loss by sub-sampling however many batches we have at the moment
+            indices_committor = torch.randperm(self.fts_configs_count)[:int(self.batch_size_fts*self.fts_configs_count)]
+            if self.fts_configs_count == 1:
+                indices_committor = 0
+            committor_penalty = torch.mean((self.committor(self.fts_configs[indices_committor])-self.fts_configs_values[indices_committor])**2)
+            loss_fts += 0.5*self.lambda_fts*committor_penalty
+            
+            #Collect all the results
+            dist.all_reduce(loss_fts)
+            return loss_fts/_world_size
+    
+    def forward(self, counter, strings):
+        self.fts_loss = self.compute_fts(counter, strings)
+        return self.fts_loss
 
 
 class CommittorLoss(_Loss):
@@ -138,6 +313,8 @@ class CommittorLoss(_Loss):
             # Now compute loss
             committor_penalty = torch.mean((self.committor(self.cl_configs[0])-self.cl_configs_values[0])**2)
             loss_cl += 0.5*self.lambda_cl*committor_penalty
+            #Collect all the results
+            dist.all_reduce(loss_cl)
             return loss_cl/_world_size
         else:
             if counter % self.cl_rate==0 and counter < self.cl_end:

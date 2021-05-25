@@ -80,37 +80,49 @@ class FTSSimulation:
                 configs[i,:] = self.sampler.torch_config
                 grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
         
-        if self.mode == 'adaptive': 
-            #Here we check if we have enough rejection counts, 
-            #If we don't, then we need to run the simulation a little longer
-            if _rank == 0:
-                while True:
-                    if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
-                        break
-                    self.sampler.step()
-                    self.sampler.save()       
-            elif _rank == _world_size-1:
-                while True:
-                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
-                        break
-                    self.sampler.step()
-                    self.sampler.save()        
-            else:
-                while True:
-                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
-                        break
-                    self.sampler.step()
-                    self.sampler.save()        
-        
-            #Next, we look at the number of timesteps taken and see how we can adjust it to sub-sample more uniformly at the next iteration
-            self.period = int(np.round((self.sampler.steps)/self.batch_size))
+        with torch.no_grad(): 
+            if self.mode == 'adaptive': 
+                #Here we check if we have enough rejection counts, 
+                #If we don't, then we need to run the simulation a little longer
+                if _rank == 0:
+                    while True:
+                        if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                            break
+                        self.sampler.step()
+                        self.sampler.save()       
+                elif _rank == _world_size-1:
+                    while True:
+                        if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
+                            break
+                        self.sampler.step()
+                        self.sampler.save()        
+                else:
+                    while True:
+                        if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                            break
+                        self.sampler.step()
+                        self.sampler.save()        
             
-            #See if the new sampling period is larger than what's indicated. If so, we reset to this upper bound.
-            if self.period > self.max_period:
-                self.period = self.max_period
-        
-        #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
-        self.sampler.normalizeRejectionCounts()
+                #Next, we look at the number of timesteps taken and see how we can adjust it to sub-sample more uniformly at the next iteration
+                #self.period = int(np.round((self.sampler.steps)/self.batch_size))
+                if _rank == 0:
+                    if self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        self.period = int(np.round((self.min_count/(self.sampler.rejection_count[_rank+1].item()*self.batch_size)*self.sampler.steps)))
+                elif _rank == _world_size-1:
+                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count:
+                        self.period = int(np.round((self.min_count/(self.sampler.rejection_count[_rank-1].item()*self.batch_size)*self.sampler.steps)))
+                else:
+                    if self.sampler.rejection_count[_rank-1].item() >= self.min_count and self.sampler.rejection_count[_rank+1].item() >= self.min_count:
+                        if self.sampler.rejection_count[_rank-1].item() < self.sampler.rejection_count[_rank+1].item():
+                            self.period = int(np.round((self.min_count/(self.sampler.rejection_count[_rank-1].item()*self.batch_size)*self.sampler.steps)))
+                        else:
+                            self.period = int(np.round((self.min_count/(self.sampler.rejection_count[_rank+1].item()*self.batch_size)*self.sampler.steps)))
+                
+                #See if the new sampling period is larger than what's indicated. If so, we reset to this upper bound.
+                if self.period > self.max_period:
+                    self.period = self.max_period
+            #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
+            self.sampler.normalizeRejectionCounts()
         
 
         #Zero out any gradients in the parameters as the last remaining step
