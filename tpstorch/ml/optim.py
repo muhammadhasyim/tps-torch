@@ -206,14 +206,15 @@ class FTSUpdate(Optimizer):
 
         defaults = dict(deltatau=deltatau, momentum=momentum, nesterov=nesterov, kappa=kappa, freeze=freeze)
         super(FTSUpdate, self).__init__(params, defaults)
-
+        self.avgconfig = 0
+        self.nsamples = 0.0
     def __setstate__(self, state):
         super(FTSUpdate, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, configs):
+    def step(self, configs, batch_size):
         """Performs a single optimization step.
 
         """
@@ -267,16 +268,24 @@ class FTSUpdate(Optimizer):
                 for i in range(1, p.shape[0]):
                     intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
                 
+                #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+                #of the desired  configuration,
                 #Now interpolate back to the correct parametrization
-                #TO DO: Figure out how to avoid unnecessary copy, i.e., newstring copy
-                index = torch.bucketize(intm_alpha,alpha)
                 newstring = torch.zeros_like(p)
-                for counter, item in enumerate(index[1:-1]):
-                    weight = (alpha[counter+1]-intm_alpha[item-1])/(intm_alpha[item]-intm_alpha[item-1])
-                    newstring[counter+1] = torch.lerp(p[item-1],p[item],weight) 
-                p[1:-1] = newstring[1:-1].detach().clone()
+                newstring[0] = p[0]
+                newstring[-1] = p[-1]
+                if _rank > 0 and _rank < _world_size-1:
+                    index = torch.bucketize(alpha[_rank],intm_alpha)
+                    weight = (alpha[_rank]-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
+                    if index == _rank+1:
+                        newstring[_rank] = torch.lerp(p[_rank],p[_rank+1],weight) 
+                    elif index == _rank:
+                        newstring[_rank] = torch.lerp(p[_rank-1],p[_rank],weight) 
+                    elif index == _rank-1:
+                        newstring[_rank] = torch.lerp(p[_rank-2],p[_rank],weight) 
+                    else:
+                        raise RuntimeError("Rank [{}]: You need to interpolate from points beyond your nearest neighbors. \n \
+                                            Reduce your timestep for the string update!".format(_rank))
+                dist.all_reduce(newstring)
+                p = newstring.clone().detach()
                 del newstring
-                
-                #self.string[1:-1] += -self.deltatau*(self.string[1:-1]-self.avgconfig[1:-1])+self.kappa*self.deltatau*self.num_nodes*(self.string[0:-2]-2*self.string[1:-1]+self.string[2:])#-self.deltatau*self.string.grad[1:-1]*(qvals[1:-1]-self.alpha[1:-1].view(-1,1))#penalty
-                #self.string[0] -= self.deltatau*(self.string[0]-self.avgconfig[0])
-                #self.string[-1] -= self.deltatau*(self.string[-1]-self.avgconfig[-1])
