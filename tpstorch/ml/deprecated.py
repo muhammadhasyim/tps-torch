@@ -7,7 +7,6 @@ from torch.optim import Optimizer
 from torch.optim.optimizer import required
 from torch.utils.data import IterableDataset
 import torch.distributed as dist
-import torch.optim.functional as F
 from itertools import cycle
 import tqdm
 import numpy as np
