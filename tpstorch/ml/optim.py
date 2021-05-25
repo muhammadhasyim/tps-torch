@@ -1,8 +1,15 @@
 import torch
 from torch.optim import Optimizer
 from torch.optim.optimizer import required
-#import torch.distributed as dist
-import torch.optim.functional as F
+
+#Depending on PyTorch version, the name of the functional module
+#May either have an underscore or not!
+oldversion = False
+try:
+    import torch.optim._functional as F
+except:
+    import torch.optim.functional as F
+    oldversion = True
 
 from tpstorch import _rank, _world_size
 from tpstorch import dist
@@ -58,6 +65,7 @@ class ParallelAdam(Optimizer):
             state_sums = []
             max_exp_avg_sqs = []
             state_steps = []
+            beta1, beta2 = group['betas']
 
             for p in group['params']:
                 if p.grad is not None:
@@ -95,7 +103,6 @@ class ParallelAdam(Optimizer):
                     # record the step after step update
                     state_steps.append(state['step'])
 
-            beta1, beta2 = group['betas']
             F.adam(params_with_grad,
                    grads,
                    exp_avgs,
