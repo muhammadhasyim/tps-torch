@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from tpstorch.ml import MLSamplerEXP
+from tpstorch.ml import MLSamplerFTS
 from tpstorch.ml.nn import FTSLayer
 from tpstorch import dist, _rank, _world_size
 import numpy as np
@@ -12,39 +12,6 @@ import numpy as np
 import tqdm, sys
 
 
-#The Neural Network for 1D should be very simple.
-class CommittorNet(nn.Module):
-    def __init__(self, d, num_nodes, unit=torch.relu):
-        super(CommittorNet, self).__init__()
-        self.num_nodes = num_nodes
-        self.d = d
-        self.unit = unit
-        self.lin1 = nn.Linear(d,num_nodes,bias=True)
-        self.lin2 = nn.Linear(num_nodes, 1, bias=True)
-        self.broadcast()
-
-    def forward(self, x):
-        #At the moment, x is flat. So if you want it to be 2x1 or 3x4 arrays, then you do it here!
-        x = self.lin1(x)
-        x = self.unit(x)
-        x = self.lin2(x)
-        return torch.sigmoid(x)
-    
-    def broadcast(self):
-        for name, param in self.named_parameters():
-            dist.broadcast(param.data,src=0)
-""""
-#In this simple 1D case, torch treates the flattened array into
-#a 0D array, which doesn't work with current FTSLayer format.
-#So, we change the way forward calculation is done a little bit.
-class FTSLayer1D(FTSLayer):
-    def __init(self,start, end,fts_size):
-        super(FTSLayer1D).__init(start,end_fts_size)
-    def forward(self, x):
-        w_times_x= torch.matmul(x,(self.string[1:]-self.string[:-1]).t())
-        bias = -torch.sum(0.5*(self.string[1:]+self.string[:-1])*(self.string[1:]-self.string[:-1]),dim=1)
-        return torch.add(w_times_x, bias)
-"""
 #The Neural Network for 1D should be very simple.
 class CommittorFTSNet(nn.Module):
     def __init__(self, d, num_nodes, start, end, fts_size, unit=torch.relu):
@@ -76,14 +43,13 @@ class CommittorFTSNet(nn.Module):
                 dist.broadcast(param.data,src=0)
 
 #The 1D Brownian particle simulator
-class BrownianParticle(MLSamplerEXP):
-    def __init__(self, dt, gamma, kT, initial,kappa,prefix='',save_config=False):
+class BrownianParticle(MLSamplerFTS):
+    def __init__(self, dt, committor, gamma, kT, initial,prefix='',save_config=False):
         super(BrownianParticle, self).__init__(initial.detach().clone())
         
         #Timestep
         self.dt = dt
-        self.kappa = kappa
-        
+        self.committor = committor
         #Noise variance
         self.coeff = np.sqrt(2*kT/gamma)
         self.gamma = gamma
@@ -119,21 +85,15 @@ class BrownianParticle(MLSamplerEXP):
             if self.qt.size() != self.config_size:
                 raise RuntimeError("New config has inconsistent size compared to previous simulation! Check implementation")
     
-    def computeWForce(self, committor_val, qval):
-        return -self.dt*self.kappa*self.torch_config.grad.data*(committor_val-qval)/self.gamma 
-    
-    def step(self, committor_val, onlytst=False):
+    def step(self):
         with torch.no_grad():
-            #Update one step
-            if onlytst:
-                self.qt += self.computeWForce(committor_val,0.5)-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+            config_test = self.qt-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
+            inftscell = self.checkFTSCell(self.committor(config_test.flatten()), dist.get_rank(), dist.get_world_size())
+            if inftscell:
+                self.qt = config_test
             else:
-                self.qt += self.computeWForce(committor_val, self.qvals[_rank])-4*self.qt*(-1+self.qt**2)*self.dt/self.gamma + self.coeff*torch.normal(torch.tensor([[0.0]]),std=np.sqrt(self.dt))
-            
-        #Don't forget to zero out gradient data after every timestep
-        #If you print out torch_config it should be tensor([a,b,c,..,d])
-        #where a,b,c and d are some 
-        self.torch_config = (self.qt.flatten()).detach().clone()
+                pass
+        self.torch_config = (self.getConfig().flatten()).detach().clone()
         self.torch_config.requires_grad_()
         try:
             self.torch.grad.data.zero_()
