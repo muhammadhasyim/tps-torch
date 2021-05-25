@@ -1,6 +1,7 @@
 #holds the loss function. And if we get the time, the custom neural net layer with the string path
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import numpy as np
 

@@ -2,7 +2,7 @@ import torch
 from torch.optim import Optimizer
 from torch.optim.optimizer import required
 #import torch.distributed as dist
-import torch.optim as F
+import torch.optim._functional as F
 
 from tpstorch import _rank, _world_size
 from tpstorch import dist
@@ -96,7 +96,7 @@ class ParallelAdam(Optimizer):
                     state_steps.append(state['step'])
 
             beta1, beta2 = group['betas']
-            F.Adam(params_with_grad,
+            F.adam(params_with_grad,
                    grads,
                    exp_avgs,
                    exp_avg_sqs,
