@@ -10,7 +10,8 @@ np.random.seed(0)
 
 
 #Initialize neural net
-committor = CommittorNet(d=2,num_nodes=200,beta=1.0,weight_pde=1.0).to('cpu')
+hidden = [20,20,20,20,20,20,20,20]
+committor = CommittorNet(d=2,num_nodes=20,beta=1.0,weight_pde=1.0, h_size=hidden).to('cpu')
 
 def energy(z):
     A = np.array([-20,-10,-17,1.5])
@@ -81,45 +82,138 @@ r_start = np.array([[0.5,0.0],[-0.1,0.5],[-0.8,0.55],[-1.0,1.0],[-1.0,1.0],[0.5,
 r_end = np.array([[-0.1,0.5],[-0.8,0.55],[-1.0,1.0],[-0.2,1.8],[-1.3,0.7],[0.8,0.0]])
 
 # Now generate a bunch of random points as a demonstration
-x = np.zeros((6*50,2))
-sigmas = np.array([[0.2],[0.2],[0.2],[0.2],[0.2],[0.2]])
+x = np.zeros((6*10,2))
+sigmas = np.array([[0.1],[0.1],[0.1],[0.1],[0.1],[0.1]])
 for i in range(r_start.shape[0]):
     r_start_ = r_start[i,:]
     r_end_ = r_end[i,:]
-    r_points = np.zeros((50,2))
-    for j in range(50):
-        r_points[j,:] = j/49*r_end_+(1-j/49)*r_start_
-    r_points_2 = np.random.normal(loc=np.array([0.0,0.0]), scale=sigmas[i], size=(50,2))
+    r_points = np.zeros((10,2))
+    for j in range(10):
+        r_points[j,:] = j/9*r_end_+(1-j/9)*r_start_
+    r_points_2 = np.random.normal(loc=np.array([0.0,0.0]), scale=sigmas[i], size=(10,2))
     r_points += r_points_2
-    x[int(i*50):int(i*50+50),:] = r_points
+    x[int(i*10):int(i*10+10),:] = r_points
+
+np.savetxt("x_points.txt", x)
+q = np.genfromtxt("q_points.txt")
 
 x = torch.tensor(x, requires_grad=True, dtype=torch.float32)
+q = torch.tensor(q, requires_grad=False, dtype=torch.float32)
 
 # optimizer
-optimizer = torch.optim.Adam(committor.parameters(), lr=0.05)
+optimizer = torch.optim.LBFGS(committor.parameters(), max_iter=20, history_size=10)
+losses = []
+loss_fn = nn.MSELoss()
+for i in range(10000):
+    train_out_q = committor(x_bc)
+    loss = loss_fn(train_out_q,u_bc)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    print(i)
+    print(loss.detach().numpy())
+    losses.append(loss.detach().numpy())
+
+# optimizer.zero_grad()
+# for j in range(6):
+    # for i in range(10000):
+        # train_out_q_bc = committor(x_bc)
+        # loss_bc = loss_fn(train_out_q_bc,u_bc)
+        # train_out_q = committor(x[(j*10):((j+1)*10),:])
+        # loss_exact = loss_fn(train_out_q,q[(j*10):((j+1)*10)])
+        # loss = loss_bc+loss_exact
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+        # print(i)
+        # print(loss.detach().numpy())
+        # losses.append(loss.detach().numpy())
+
+# optimizer.zero_grad()
+# for j in range(3):
+    # for i in range(10000):
+        # train_out_q_bc = committor(x_bc)
+        # loss_bc = loss_fn(train_out_q_bc,u_bc)
+        # train_out_q = committor(x[(j*20):((j+1)*20),:])
+        # loss_exact = loss_fn(train_out_q,q[(j*20):((j+1)*20)])
+        # loss = loss_bc+loss_exact
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+        # print(i)
+        # print(loss.detach().numpy())
+        # losses.append(loss.detach().numpy())
+
+# optimizer.zero_grad()
+# for j in range(2):
+    # for i in range(10000):
+        # train_out_q_bc = committor(x_bc)
+        # loss_bc = loss_fn(train_out_q_bc,u_bc)
+        # train_out_q = committor(x[(j*30):((j+1)*30),:])
+        # loss_exact = loss_fn(train_out_q,q[(j*30):((j+1)*30)])
+        # loss = loss_bc+loss_exact
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+        # print(i)
+        # print(loss.detach().numpy())
+        # losses.append(loss.detach().numpy())
+
+optimizer.zero_grad()
+for i in range(10000):
+    train_out_q_bc = committor(x_bc)
+    loss_bc = loss_fn(train_out_q_bc,u_bc)
+    train_out_q = committor(x)
+    loss_exact = loss_fn(train_out_q,q)
+    loss = loss_bc+loss_exact
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    print(i)
+    print(loss.detach().numpy())
+    losses.append(loss.detach().numpy())
+
+# batch_size = 5
+# for j in range(1000):
+    # print(j)
+    # permutation = torch.randperm(q.size()[0])
+    # for i in range(0, q.size()[0], batch_size):
+        # optimizer.zero_grad()
+        # indices = permutation[i:i+batch_size]
+        # train_out_q_bc = committor(x_bc)
+        # loss_bc = loss_fn(train_out_q_bc,u_bc)
+        # train_out_q = committor(x[indices])
+        # loss_exact = loss_fn(train_out_q,q[indices])
+        # loss = loss_bc+loss_exact
+        # loss.backward()
+        # optimizer.step()
+        # print(loss.detach().numpy())
+        # losses.append(loss.detach().numpy())
 
 # training
 def train(epoch):
     committor.train()
     def closure():
         optimizer.zero_grad()
-        loss_pde = committor.loss_pde(x)
-        loss_bc = committor.loss_bc(x_bc, u_bc)
-        loss = loss_pde + loss_bc
+        #loss_pde = committor.loss_pde(x)
+        #loss_bc = committor.loss_bc(x_bc, u_bc)
+        loss_cheat = committor.loss_cheat(x, q)
+        #loss = loss_pde + loss_bc + loss_cheat
+        loss = loss_cheat
         loss.backward()
         return loss
     loss = optimizer.step(closure)
     loss_value = loss.item() if not isinstance(loss, float) else loss
     print(f'epoch {epoch}: loss {loss_value:.6f}')
 
-epochs = 1000
-committor.weight_pde = 0.0
-for epoch in range(epochs):
-    train(epoch)
+# epochs = 1000
+# committor.weight_pde = 0.0
+# for epoch in range(epochs):
+    # train(epoch)
 
-epochs = 1000
-committor.weight_pde = 0.0001
-for epoch in range(epochs):
-    train(epoch)
+# epochs = 1000
+# committor.weight_pde = 0.0
+# for epoch in range(epochs):
+    # train(epoch)
 
 torch.save(committor.state_dict(), "simple_params")

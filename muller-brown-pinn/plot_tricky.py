@@ -10,7 +10,8 @@ import numpy as np
 import tqdm, sys
 
 #Initialize neural net
-committor = CommittorNet(d=2,num_nodes=200,beta=1).to('cpu')
+hidden = [20,20,20,20,20]
+committor = CommittorNet(d=2,num_nodes=20,beta=1,weight_pde=1, h_size=hidden).to('cpu')
 committor.load_state_dict(torch.load("simple_params"))
 
 A = np.array([-20,-10,-17,1.5])
@@ -39,12 +40,16 @@ X = np.linspace(-2.0, 1.5, nx)
 Y = np.linspace(-1.0, 2.5, ny)
 print(X.shape)
 
+x_ex = np.genfromtxt("x_points.txt")
+q_ex = np.genfromtxt("q_points.txt")
+
 xv, yv = np.meshgrid(X, Y)
 z = energy(xv,yv,A,a,b,c,x_,y_)
 h = plt.contourf(X,Y,z,levels=[-15+i for i in range(16)])
 print(np.shape(z),np.shape(xv))
-qvals = q(xv,yv)
-CS = plt.contour(X, Y, qvals,levels=[0.01,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.99])
-plt.colorbar()
-plt.clabel(CS, fontsize=10, inline=1)#
+# qvals = q(xv,yv)
+# CS = plt.contour(X, Y, qvals,levels=[0.01,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.99])
+# plt.colorbar()
+# plt.clabel(CS, fontsize=10, inline=1)#
+plt.scatter(x_ex[:,0], x_ex[:,1], c=q_ex)
 plt.show()

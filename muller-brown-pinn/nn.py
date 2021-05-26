@@ -2,26 +2,26 @@ import torch
 import torch.nn as nn
 
 class CommittorNet(nn.Module):
-    def __init__(self, d, num_nodes, beta, weight_pde, unit=torch.relu):
+    def __init__(self, d, num_nodes, beta, weight_pde, h_size=[200,200], unit=torch.relu):
         super(CommittorNet, self).__init__()
         self.num_nodes = num_nodes
         self.d = d
         self.beta_ = beta
         self.weight_pde = weight_pde
         self.unit = unit
-        self.lin1 = nn.Linear(d, num_nodes, bias=True)
-        #self.lin12 = nn.Linear(num_nodes, num_nodes, bias=True)
-        self.lin2 = nn.Linear(num_nodes, 1, bias=False)
+        self.h_size = h_size
+        self.fc = nn.ModuleList()
+        self.fc.append(nn.Linear(d, num_nodes, bias=True))
+        for i in range(1, len(h_size)):
+            self.fc.append(nn.Linear(h_size[i-1], h_size[i], bias=True))
+        self.fc.append(nn.Linear(h_size[-1], 1, bias=False))
         self.thresh = torch.sigmoid
 
     def forward(self, x):
         #At the moment, x is flat. So if you want it to be 2x1 or 3x4 arrays, then you do it here!
-        x = self.lin1(x)
-        x = self.unit(x)
-        # x = self.lin12(x)
-        # x = self.unit(x)
-        x = self.lin2(x)
-        x = self.thresh(x)
+        for i in range(len(self.h_size)-1):
+            x = self.unit(self.fc[i](x))
+        x = self.thresh(self.fc[-1](x))
         return x
 
     def energy_torch(self, z):
@@ -65,3 +65,7 @@ class CommittorNet(nn.Module):
     def loss_bc(self, x_b, u_b):
         q = self.forward(x_b)
         return ((q-u_b)**2).mean()
+
+    def loss_cheat(self, x, q_exact):
+        q = self.forward(x)
+        return ((q-q_exact)**2).mean()
