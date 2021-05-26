@@ -4,9 +4,8 @@ import torch.distributed as dist
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from tpstorch.ml import MLSamplerFTS
-from tpstorch.ml.nn import FTSLayer
 from tpstorch.examples.mullerbrown_ml import MyMLFTSSampler
+from tpstorch import _rank, _world_size
 import numpy as np
 
 #Import any other thing
@@ -14,28 +13,23 @@ import tqdm, sys
 
 
 #A single hidden layer NN, where some nodes possess the string configurations
-class CommittorFTSNet(nn.Module):
-    def __init__(self, d, num_nodes, start, end, fts_size, unit=torch.relu):
-        super(CommittorFTSNet, self).__init__()
+class CommittorNet(nn.Module):
+    def __init__(self, d, num_nodes, unit=torch.relu):
+        super(CommittorNet, self).__init__()
         self.num_nodes = num_nodes
         self.d = d
         self.unit = unit
-        self.lin1 = FTSLayer(start, end, fts_size)
-        self.lin3 = nn.Linear(d, num_nodes-fts_size+1, bias=True)
-        self.lin2 = nn.Linear(num_nodes, 1, bias=True)
+        self.lin1 = nn.Linear(d, num_nodes, bias=True)
+        self.lin3 = nn.Linear(num_nodes, num_nodes, bias=True)
+        self.lin2 = nn.Linear(num_nodes, 1, bias=False)
         self.broadcast()
 
     def forward(self, x):
-        #At the moment, x is flat. So if you want it to be 2x1 or 3x4 arrays, then you do it here!
-        if x.shape == torch.Size([self.d]):
-            x = x.view(-1,2)
-        x1 = self.lin1(x)
-        x1 = self.unit(x1)
-        x3 = self.lin3(x)
-        x3 = self.unit(x3)
-        x = torch.cat((x1,x3),dim=1)
+        x = self.lin1(x)
+        x = self.unit(x)
+        x = self.lin3(x)
+        x = self.unit(x)
         x = self.lin2(x)
-        #x = self.lin2(x)
         return torch.sigmoid(x)
     
     def broadcast(self):
@@ -47,11 +41,8 @@ class CommittorFTSNet(nn.Module):
 # within function
 # have omnious committor part that actual committor overrides?
 class MullerBrown(MyMLFTSSampler):
-    def __init__(self,param,config,rank,dump,beta,mpi_group,committor,save_config=False):
+    def __init__(self,param,config,rank,dump,beta,mpi_group,ftslayer,save_config=False):
         super(MullerBrown, self).__init__(param,config.detach().clone(),rank,dump,beta,mpi_group)
-
-        self.committor = committor
-
         self.save_config = save_config
         self.timestep = 0
 
@@ -60,21 +51,33 @@ class MullerBrown(MyMLFTSSampler):
         self.flattened_size = config.flatten().size()
         self.torch_config = config
         
+        self.ftslayer = ftslayer
         #Configs file Save Alternative, since the default XYZ format is an overkill 
         self.file = open("configs_{}.txt".format(dist.get_rank()), "w")
     
+    @torch.no_grad() 
     def initialize_from_torchconfig(self, config):
         # Don't have to worry about all that much all, can just set it
         self.setConfig(config)
+    
+    @torch.no_grad() 
+    def reset(self):
+        self.distance_sq_list = self.ftslayer(self.getConfig().flatten())
+        inftscell = self.checkFTSCell(_rank, _world_size)
+        if inftscell:
+            pass
+        else:
+            self.setConfig(self.ftslayer.string[_rank])
+            pass
 
     def step(self):
         with torch.no_grad():
             config_test = torch.zeros_like(self.torch_config)
             self.propose(config_test, 0.0, False)
-            committor_val_ = self.committor(config_test)
-            inftscell = self.checkFTSCell(self.committor(config_test.flatten()), dist.get_rank(), dist.get_world_size())
+            self.distance_sq_list = self.ftslayer(config_test.flatten())
+            inftscell = self.checkFTSCell(_rank, _world_size)
             if inftscell:
-                self.acceptReject(config_test)#, committor_val_.item(), False, True)
+                self.acceptReject(config_test)
             else:
                 pass
         self.torch_config = (self.getConfig().flatten()).detach().clone()
@@ -96,6 +99,7 @@ class MullerBrown(MyMLFTSSampler):
         except:
             pass
     
+    @torch.no_grad() 
     def isProduct(self,config):
         end = torch.tensor([[0.6,0.08]])
         radii = 0.025
@@ -106,6 +110,7 @@ class MullerBrown(MyMLFTSSampler):
         else:
             return False
 
+    @torch.no_grad() 
     def isReactant(self,config):
         start = torch.tensor([[-0.5,1.5]])
         radii = 0.025
