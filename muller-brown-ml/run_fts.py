@@ -72,8 +72,8 @@ committor.zero_grad()
 #Construct FTSSimulation
 n_boundary_samples = 100
 batch_size = 32
-period = 1
-datarunner = FTSSimulation(mb_sim, committor, period=period, batch_size=batch_size, dimN=2,mode='adaptive')#,mode='nonadaptive')
+period = 40
+datarunner = FTSSimulation(mb_sim, committor, period=period, batch_size=batch_size, dimN=2)
 
 #Initialize main loss function and optimizers
 loss = BKELossFTS(  bc_sampler = mb_sim_bc, 
@@ -85,22 +85,26 @@ loss = BKELossFTS(  bc_sampler = mb_sim_bc,
                     n_bc_samples = 100, 
                     bc_period = 10,
                     batch_size_bc = 0.5,
-                    tol = 1e-6)
+                    tol = 1e-6,
+                    mode = 'shift')
 
+#This is the new committor loss! Feel free to comment this out if you don't need it
 cmloss = FTSCommittorLoss(  fts_sampler = mb_sim,
                             committor = committor,
                             fts_layer=ftslayer, 
                             dimN = 2,
-                            lambda_fts=1.0,
-                            fts_start=100,  
+                            lambda_fts=1e-1,
+                            fts_start=200,  
                             fts_end=2000,
                             fts_max_steps=batch_size*period*4, #To estimate the committor, we'll run foru times as fast 
                             fts_rate=4, #In turn, we will only sample more committor value estimate  after 4 iterations 
                             fts_min_count=2000, #Minimum count so that simulation doesn't (potentially) run too long
-                            batch_size_fts=0.5
+                            batch_size_fts=0.5,
+                            tol = 1e-6,
+                            mode = 'shift'
                             )
 
-optimizer = ParallelAdam(committor.parameters(), lr=1e-3)
+optimizer = ParallelAdam(committor.parameters(), lr=1e-2)
 #optimizer = ParallelSGD(committor.parameters(), lr=1e-3,momentum=0.95,nesterov=True)
 ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=1.0/batch_size,momentum=0.95,nesterov=True, kappa=0.1)
 
@@ -129,6 +133,8 @@ for epoch in range(1):
         
         # (2) Update the neural network
         cost = loss(grad_xs, mb_sim.rejection_count)
+        
+        #We can skip the new committor loss calculation
         cmcost = cmloss(actual_counter, ftslayer.string)
         totalcost = cost+cmcost
         totalcost.backward()

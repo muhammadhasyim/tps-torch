@@ -67,7 +67,7 @@ class FTSCommittorLoss(_Loss):
 
             batch_size_fts (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
     """
-    def __init__(self, fts_sampler, committor, fts_layer, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5, tol = 1e-8,**kwargs):
+    def __init__(self, fts_sampler, committor, fts_layer, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5, tol = 1e-6, mode='noshift',**kwargs):
         super(FTSCommittorLoss, self).__init__()
         
         self.fts_loss = torch.zeros(1)
@@ -91,7 +91,13 @@ class FTSCommittorLoss(_Loss):
         if any("min_count" in s for s in kwargs):
             self.min_count = fts_min_count
         self.max_steps = fts_max_steps
+        
         self.tol = 1e-8
+        self.mode = mode
+        if mode != 'noshift' and mode != 'shift':
+            raise RuntimeError("The only available modes are 'shift' or 'noshift'!")
+        
+    
     def runSimulation(self, strings):
         with torch.no_grad():
             #Initialize
@@ -112,7 +118,6 @@ class FTSCommittorLoss(_Loss):
     
     @torch.no_grad()
     def compute_qalpha(self):
-    #def computeZl(self,rejection_counts):
         """ Computes the reweighting factor z_l by solving an eigenvalue problem
             
             Args:
@@ -128,13 +133,14 @@ class FTSCommittorLoss(_Loss):
         Kmatrix[_rank] = self.fts_sampler.rejection_count
         
         #Add tolerance values to the off-diagonal elements
-        if _rank == 0:
-            Kmatrix[_rank+1] = self.tol
-        elif _rank == _world_size-1:
-            Kmatrix[_rank-1] = self.tol
-        else:
-            Kmatrix[_rank-1] = self.tol
-            Kmatrix[_rank+1] = self.tol
+        if self.mode == 'shift':
+            if _rank == 0:
+                Kmatrix[_rank+1] = self.tol
+            elif _rank == _world_size-1:
+                Kmatrix[_rank-1] = self.tol
+            else:
+                Kmatrix[_rank-1] = self.tol
+                Kmatrix[_rank+1] = self.tol
         
         #All reduce to collect the results
         dist.all_reduce(Kmatrix)
@@ -665,11 +671,14 @@ class BKELossFTS(_BKELoss):
     """
 
     def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
-                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=1e-8):
+                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=1e-6, mode='noshift'):
         super(BKELossFTS, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
                                         start_prod, n_bc_samples, bc_period, batch_size_bc)
         self.tol = tol
-
+        self.mode = mode
+        if mode != 'noshift' and mode != 'shift':
+            raise RuntimeError("The only available modes are 'shift' or 'noshift'!")
+    
     @torch.no_grad()
     def computeZl(self,rejection_counts):
         """ Computes the reweighting factor z_l by solving an eigenvalue problem
@@ -686,13 +695,14 @@ class BKELossFTS(_BKELoss):
         Kmatrix[_rank] = rejection_counts
         
 	#Add tolerance values to the off-diagonal elements
-        if _rank == 0:
-            Kmatrix[_rank+1] = self.tol
-        elif _rank == _world_size-1:
-            Kmatrix[_rank-1] = self.tol
-        else:
-            Kmatrix[_rank-1] = self.tol
-            Kmatrix[_rank+1] = self.tol
+        if self.mode == 'shift':
+            if _rank == 0:
+                Kmatrix[_rank+1] = self.tol
+            elif _rank == _world_size-1:
+                Kmatrix[_rank-1] = self.tol
+            else:
+                Kmatrix[_rank-1] = self.tol
+                Kmatrix[_rank+1] = self.tol
         
 	#All reduce to collect the results
         dist.all_reduce(Kmatrix)
