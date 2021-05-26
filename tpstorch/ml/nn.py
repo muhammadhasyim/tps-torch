@@ -67,7 +67,7 @@ class FTSCommittorLoss(_Loss):
 
             batch_size_fts (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
     """
-    def __init__(self, fts_sampler, committor, fts_layer, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5, tol = 1e-6, mode='noshift',**kwargs):
+    def __init__(self, fts_sampler, committor, fts_layer, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=0, batch_size_fts=0.5, tol = 1e-6, mode='noshift'):
         super(FTSCommittorLoss, self).__init__()
         
         self.fts_loss = torch.zeros(1)
@@ -87,11 +87,8 @@ class FTSCommittorLoss(_Loss):
         self.fts_configs_values = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dtype=torch.float)
         self.fts_configs_count = 0
         
-        self.min_count = 0
-        if any("min_count" in s for s in kwargs):
-            self.min_count = fts_min_count
+        self.min_count = fts_min_count
         self.max_steps = fts_max_steps
-        
         self.tol = 1e-8
         self.mode = mode
         if mode != 'noshift' and mode != 'shift':
@@ -104,14 +101,18 @@ class FTSCommittorLoss(_Loss):
             self.fts_sampler.reset()
             for i in range(self.max_steps):
                 self.fts_sampler.step()
+                self.fts_sampler.save()
                 #If we don't, then we need to run the simulation a little longer
                 if self.min_count != 0:
                     #Here we check if we have enough rejection counts, 
-                    if _rank == 0 and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                    if _rank == 0:
+                        if self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
                             break
-                    elif _rank == _world_size-1 and self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count:
+                    elif _rank == _world_size-1:
+                        if self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count:
                             break
-                    elif self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                    else:
+                        if self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
                             break
             #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
             self.fts_sampler.normalizeRejectionCounts()
