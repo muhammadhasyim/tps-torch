@@ -152,8 +152,14 @@ class FTSCommittorLoss(_Loss):
         #Compute the reweighting factors using an eigensolver
         #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
         v, w = nullspace(Kmatrix.numpy(), atol=self.tol, rtol=0)
-        index = np.argmin(w)
-        zl = np.real(v[:,index])
+        try:
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        except:
+            #Shift value may not be small enough so we choose a default higher tolerance detection
+            v, w = nullspace(Kmatrix.numpy(), atol=10**(-5), rtol=0)
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
         
         #Normalize
         zl = zl/np.sum(zl)  
@@ -711,8 +717,14 @@ class BKELossFTS(_BKELoss):
         Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1)-self.tol)
         #Compute the reweighting factors using an eigensolver
         v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
-        index = np.argmin(w)
-        zl = np.real(v[:,index])
+        try:
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        except:
+            #Shift value may not be small enough so we choose a default higher tolerance detection
+            v, w = nullspace(Kmatrix.numpy(), atol=10**(-5), rtol=0)
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
         
         #Normalize
         zl = zl/np.sum(zl)  
