@@ -685,7 +685,7 @@ class BKELossFTS(_BKELoss):
         Kmatrix = torch.zeros(_world_size,_world_size)
         Kmatrix[_rank] = rejection_counts
         
-        #Add tolerance values to the off-diagonal elements
+	#Add tolerance values to the off-diagonal elements
         if _rank == 0:
             Kmatrix[_rank+1] = self.tol
         elif _rank == _world_size-1:
@@ -693,12 +693,11 @@ class BKELossFTS(_BKELoss):
         else:
             Kmatrix[_rank-1] = self.tol
             Kmatrix[_rank+1] = self.tol
-
-        #All reduce to collect the results
-        dist.all_reduce(Kmatrix)
         
+	#All reduce to collect the results
+        dist.all_reduce(Kmatrix)
         #Finallly, build the final matrix
-        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))
+        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1)-self.tol)
         #Compute the reweighting factors using an eigensolver
         v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
         index = np.argmin(w)

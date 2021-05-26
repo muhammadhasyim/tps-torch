@@ -38,10 +38,6 @@ class FTSLayer(nn.Module):
         bias = -torch.sum(0.5*(self.string[1:]+self.string[:-1])*(self.string[1:]-self.string[:-1]),dim=1)
         
         return torch.add(w_times_x, bias)
-        def compute_distance(self,x):
-            with torch.no_grad():
-                distances = torch.sum((self.lin1.string-x)**2,dim=1)
-                return distances
 
 
 
