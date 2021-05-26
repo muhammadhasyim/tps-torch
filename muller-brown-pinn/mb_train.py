@@ -100,17 +100,21 @@ q = np.genfromtxt("q_points.txt")
 x = torch.tensor(x, requires_grad=True, dtype=torch.float32)
 q = torch.tensor(q, requires_grad=False, dtype=torch.float32)
 
+# loss = optimizer.step(closure)
 # optimizer
-optimizer = torch.optim.LBFGS(committor.parameters(), max_iter=20, history_size=10)
+optimizer = torch.optim.LBFGS(committor.parameters(), lr=0.001, max_iter=20, history_size=10)
 losses = []
 loss_fn = nn.MSELoss()
 for i in range(10000):
-    train_out_q = committor(x_bc)
-    loss = loss_fn(train_out_q,u_bc)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    def closure():
+        optimizer.zero_grad()
+        train_out_q = committor(x_bc)
+        loss = loss_fn(train_out_q,u_bc)
+        loss.backward()
+        return loss
+    optimizer.step(closure)
     print(i)
+    loss = closure()
     print(loss.detach().numpy())
     losses.append(loss.detach().numpy())
 
@@ -161,15 +165,18 @@ for i in range(10000):
 
 optimizer.zero_grad()
 for i in range(10000):
-    train_out_q_bc = committor(x_bc)
-    loss_bc = loss_fn(train_out_q_bc,u_bc)
-    train_out_q = committor(x)
-    loss_exact = loss_fn(train_out_q,q)
-    loss = loss_bc+loss_exact
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    def closure():
+        optimizer.zero_grad()
+        train_out_q_bc = committor(x_bc)
+        loss_bc = loss_fn(train_out_q_bc,u_bc)
+        train_out_q = committor(x)
+        loss_exact = loss_fn(train_out_q,q)
+        loss = loss_bc+loss_exact
+        loss.backward()
+        return loss
+    optimizer.step(closure)
     print(i)
+    loss = closure()
     print(loss.detach().numpy())
     losses.append(loss.detach().numpy())
 
