@@ -72,8 +72,8 @@ committor.zero_grad()
 #Construct FTSSimulation
 n_boundary_samples = 100
 batch_size = 32
-period = 40
-datarunner = FTSSimulation(mb_sim, committor, period=period, batch_size=batch_size, dimN=2,mode='nonadaptive')
+period = 1
+datarunner = FTSSimulation(mb_sim, committor, period=period, batch_size=batch_size, dimN=2,mode='adaptive')#,mode='nonadaptive')
 
 #Initialize main loss function and optimizers
 loss = BKELossFTS(  bc_sampler = mb_sim_bc, 
@@ -84,7 +84,8 @@ loss = BKELossFTS(  bc_sampler = mb_sim_bc,
                     start_prod = end, 
                     n_bc_samples = 100, 
                     bc_period = 10,
-                    batch_size_bc = 0.5)
+                    batch_size_bc = 0.5,
+                    tol = 1e-6)
 
 cmloss = FTSCommittorLoss(  fts_sampler = mb_sim,
                             committor = committor,

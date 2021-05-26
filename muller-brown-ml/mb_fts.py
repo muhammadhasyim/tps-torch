@@ -62,6 +62,7 @@ class MullerBrown(MyMLFTSSampler):
     
     @torch.no_grad() 
     def reset(self):
+        self.steps = 0
         self.distance_sq_list = self.ftslayer(self.getConfig().flatten())
         inftscell = self.checkFTSCell(_rank, _world_size)
         if inftscell:
