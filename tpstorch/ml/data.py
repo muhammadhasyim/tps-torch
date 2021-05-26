@@ -66,7 +66,9 @@ class FTSSimulation:
         #Gradient of committor w.r.t. x for every x in configs
         grads = torch.zeros(self.batch_size,self.dimN)
         
-        
+        #Reset the simulation if it is outside fo the cell
+        self.sampler.reset()
+
         for i in range(self.batch_size):
             for j in range(self.period):
                 #Take one step

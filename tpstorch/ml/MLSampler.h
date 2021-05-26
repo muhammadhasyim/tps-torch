@@ -13,21 +13,22 @@ class MLSamplerFTS
         //This is necessarry for layout compatibility with neural net!
         torch::Tensor torch_config;
         
-        //List of committor values used to constrain the simulation system. 
-        torch::Tensor committor_list;
+        //List of ||x-\phi_\alpha||^2 values used to constrain the simulation system in a Voronoi cell. 
+        torch::Tensor distance_sq_list;
         
         //Total number of rejections due to going out of the boxes
         torch::Tensor rejection_count;
         
         //Total number of steps taken during simulation
         double steps; 
+        
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerFTS(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             :   torch_config(config), m_mpi_group(mpi_group)
         {
             //Turn on the requires grad by default
             torch_config.requires_grad_();
-            committor_list = torch::linspace(0,1,mpi_group->getSize()+1);
+            distance_sq_list = torch::linspace(0,1,mpi_group->getSize()+1);
             rejection_count = torch::zeros(mpi_group->getSize());
             steps = 0.0;
 
@@ -35,29 +36,19 @@ class MLSamplerFTS
         virtual ~MLSamplerFTS(){};
        
         //Check whether you are in the cell or not 
-        virtual bool checkFTSCell(const double& committor_val, const int& rank_in, const int& world_in)
+        virtual bool checkFTSCell(const int& rank_in, const int& world_in)
         {
-            steps += 1.0;
             torch::NoGradGuard no_grad_guard;
-            if( committor_list[rank_in].item<double>() < committor_val && committor_val < committor_list[rank_in+1].item<double>() )
+            steps += 1.0;
+            if( torch::argmin(distance_sq_list).item<int>()  == rank_in)
             {
                 return true;
             }
             else
             {
-                //Check which cell it fell into:
-                for(int i = 0; i < world_in; ++i)
-                {
-                    if(i != rank_in &&  committor_list[i].item<double>() < committor_val && committor_val < committor_list[i+1].item<double>() )
-                    {
-                        rejection_count[i] += 1;
-                        break;
-                    }
-
-                }
+                rejection_count[torch::argmin(distance_sq_list).item<int>()] += 1;
                 return false;
             }
-
         };
         
        virtual void normalizeRejectionCounts()

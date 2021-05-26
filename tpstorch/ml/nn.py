@@ -43,13 +43,7 @@ class FTSLayer(nn.Module):
         self.string.requires_grad = False 
     
     def forward(self, x):
-        #The weights of this layer models hyperplanes wedged between each node
-        w_times_x= torch.matmul(x,(self.string[1:]-self.string[:-1]).t())
-        
-        #The bias so that at the half-way point between two strings, the function is zero
-        bias = -torch.sum(0.5*(self.string[1:]+self.string[:-1])*(self.string[1:]-self.string[:-1]),dim=1)
-        
-        return torch.add(w_times_x, bias)
+        return torch.sum((self.string-x)**2,dim=1)
 
 class FTSCommittorLoss(_Loss):
     r"""Loss function which implements the MSE loss for the committor function. 
@@ -73,12 +67,12 @@ class FTSCommittorLoss(_Loss):
 
             batch_size_fts (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
     """
-    def __init__(self, fts_sampler, committor, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5):
+    def __init__(self, fts_sampler, committor, fts_layer, dimN, lambda_fts=1.0, fts_start=200, fts_end=2000000, fts_rate=100, fts_max_steps=10**6, fts_min_count=10, batch_size_fts=0.5, tol = 1e-8,**kwargs):
         super(FTSCommittorLoss, self).__init__()
         
         self.fts_loss = torch.zeros(1)
+        self.fts_layer = fts_layer
         self.committor = committor
-
         self.fts_sampler = fts_sampler
         self.fts_start = fts_start
         self.fts_end = fts_end
@@ -92,35 +86,27 @@ class FTSCommittorLoss(_Loss):
             self.fts_configs = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dimN, dtype=torch.float) 
         self.fts_configs_values = torch.zeros(int((self.fts_end-self.fts_start)/fts_rate+2), dtype=torch.float)
         self.fts_configs_count = 0
-    
-        self.min_count = fts_min_count
+        
+        self.min_count = 0
+        if any("min_count" in s for s in kwargs):
+            self.min_count = fts_min_count
         self.max_steps = fts_max_steps
-
+        self.tol = 1e-8
     def runSimulation(self, strings):
         with torch.no_grad():
             #Initialize
-            self.fts_sampler.committor_list[0] = 0.0
-            self.fts_sampler.committor_list[-1] = 1.0
-            for i in range(_world_size):
-                self.fts_sampler.rejection_count[i] = 0
-                if i > 0:
-                    self.fts_sampler.committor_list[i]= self.committor(0.5*(strings[i-1]+strings[i])).item()
-            inftscell = self.fts_sampler.checkFTSCell(self.committor(self.fts_sampler.getConfig().flatten()), _rank, _world_size)
-            if inftscell:
-                pass
-            else:
-                self.fts_sampler.setConfig(strings[_rank])
-            
+            self.fts_sampler.reset()
             for i in range(self.max_steps):
                 self.fts_sampler.step()
-                #Here we check if we have enough rejection counts, 
                 #If we don't, then we need to run the simulation a little longer
-                if _rank == 0 and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
-                        break
-                elif _rank == _world_size-1 and self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count:
-                        break
-                elif self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
-                        break
+                if self.min_count != 0:
+                    #Here we check if we have enough rejection counts, 
+                    if _rank == 0 and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                            break
+                    elif _rank == _world_size-1 and self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count:
+                            break
+                    elif self.fts_sampler.rejection_count[_rank-1].item() >= self.min_count and self.fts_sampler.rejection_count[_rank+1].item() >= self.min_count:
+                            break
             #Since simulations may run in un-equal amount of times, we have to normalize rejection counts by the number of timesteps taken
             self.fts_sampler.normalizeRejectionCounts()
     
@@ -136,9 +122,19 @@ class FTSCommittorLoss(_Loss):
             Formula and maths is based on our paper. 
         """
         qalpha = torch.linspace(0,1,_world_size)
+        
         #Set the row according to rank
         Kmatrix = torch.zeros(_world_size,_world_size)
         Kmatrix[_rank] = self.fts_sampler.rejection_count
+        
+        #Add tolerance values to the off-diagonal elements
+        if _rank == 0:
+            Kmatrix[_rank+1] = self.tol
+        elif _rank == _world_size-1:
+            Kmatrix[_rank-1] = self.tol
+        else:
+            Kmatrix[_rank-1] = self.tol
+            Kmatrix[_rank+1] = self.tol
         
         #All reduce to collect the results
         dist.all_reduce(Kmatrix)
@@ -148,7 +144,7 @@ class FTSCommittorLoss(_Loss):
         
         #Compute the reweighting factors using an eigensolver
         #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
-        v, w = nullspace(Kmatrix.numpy(), atol=1e-6, rtol=0)
+        v, w = nullspace(Kmatrix.numpy(), atol=self.tol, rtol=0)
         index = np.argmin(w)
         zl = np.real(v[:,index])
         
@@ -156,19 +152,27 @@ class FTSCommittorLoss(_Loss):
         zl = zl/np.sum(zl)  
         
         #Alright, now compute approximate committor values around the string
-        #Build a new matrix
-        eGalpha = torch.zeros(_world_size-2,_world_size-2)
+        #Which solves a linear equation to solve Ax=b
+        
+        #Build the A  matrix
+        A = torch.zeros(_world_size-2,_world_size-2)
         if _rank > 0 and _rank < _world_size-1:
             i = _rank-1
-            eGalpha[i,i] = float(-zl[_rank-1]-zl[_rank+1])
+            A[i,i] = float(-zl[_rank-1]-zl[_rank+1])
             if i != 0:
-                eGalpha[i,i-1] = float(zl[_rank-1])
+                A[i,i-1] = float(zl[_rank-1])
             if i != _world_size-3:
-                eGalpha[i,i+1] = float(zl[_rank+1])
-        dist.all_reduce(eGalpha)
+                A[i,i+1] = float(zl[_rank+1])
+        dist.all_reduce(A)
+        
+        #Build the b vector
         b = np.zeros(_world_size-2)
         b[-1] = -zl[-1]
-        qalpha[1:-1] = torch.from_numpy(scipy.linalg.solve(a=eGalpha.numpy(),b=b)) 
+
+        #Approximate committor values
+        qalpha[1:-1] = torch.from_numpy(scipy.linalg.solve(a=A.numpy(),b=b)) 
+        
+        #Print out the estimated committor values
         dist.barrier()
         if _rank == 0:
             print("Estimated committor values: \n {}".format(qalpha.numpy()))
@@ -661,10 +665,11 @@ class BKELossFTS(_BKELoss):
     """
 
     def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
-                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1):
+                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=1e-8):
         super(BKELossFTS, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
                                         start_prod, n_bc_samples, bc_period, batch_size_bc)
-    
+        self.tol = tol
+
     @torch.no_grad()
     def computeZl(self,rejection_counts):
         """ Computes the reweighting factor z_l by solving an eigenvalue problem
@@ -680,14 +685,22 @@ class BKELossFTS(_BKELoss):
         Kmatrix = torch.zeros(_world_size,_world_size)
         Kmatrix[_rank] = rejection_counts
         
+        #Add tolerance values to the off-diagonal elements
+        if _rank == 0:
+            Kmatrix[_rank+1] = self.tol
+        elif _rank == _world_size-1:
+            Kmatrix[_rank-1] = self.tol
+        else:
+            Kmatrix[_rank-1] = self.tol
+            Kmatrix[_rank+1] = self.tol
+
         #All reduce to collect the results
         dist.all_reduce(Kmatrix)
         
         #Finallly, build the final matrix
         Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))
         #Compute the reweighting factors using an eigensolver
-        #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
-        v, w = nullspace(Kmatrix.numpy(), atol=1e-6, rtol=0)
+        v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
         index = np.argmin(w)
         zl = np.real(v[:,index])
         

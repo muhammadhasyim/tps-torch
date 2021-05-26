@@ -12,6 +12,39 @@ from itertools import cycle
 import tqdm
 import numpy as np
 
+class FTSLayer(nn.Module):
+    r""" A linear layer, where the paramaters correspond to the string obtained by the 
+        general FTS method. 
+        
+        Args:
+            react_config (torch.Tensor): starting configuration in the reactant basin. 
+            
+            prod_config (torch.Tensor): starting configuration in the product basin. 
+
+    """
+    def __init__(self, react_config, prod_config, num_nodes):
+        super().__init__()
+            
+        #Declare my string as NN paramaters and disable gradient computations
+        string = torch.vstack([(1-s)*react_config+s*prod_config for s in np.linspace(0, 1, num_nodes)])
+        self.string = nn.Parameter(string) 
+        self.string.requires_grad = False 
+    
+    def forward(self, x):
+        #The weights of this layer models hyperplanes wedged between each node
+        w_times_x= torch.matmul(x,(self.string[1:]-self.string[:-1]).t())
+        
+        #The bias so that at the half-way point between two strings, the function is zero
+        bias = -torch.sum(0.5*(self.string[1:]+self.string[:-1])*(self.string[1:]-self.string[:-1]),dim=1)
+        
+        return torch.add(w_times_x, bias)
+        def compute_distance(self,x):
+            with torch.no_grad():
+                distances = torch.sum((self.lin1.string-x)**2,dim=1)
+                return distances
+
+
+
 class EXPReweightSGD(Optimizer):
     r"""Implements stochastic gradient descent (optionally with momentum).
     

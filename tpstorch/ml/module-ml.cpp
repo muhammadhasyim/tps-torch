@@ -144,13 +144,13 @@ class PyMLSamplerFTS : public MLSamplerFTS
             );
         };
         
-        bool checkFTSCell(const double& committor_val, const int& rank_in, const int& world_in) override
+        bool checkFTSCell(const int& rank_in, const int& world_in) override
         {
         PYBIND11_OVERRIDE(
             bool, /* Return type */
             MLSamplerFTS,      /* Parent class */
             checkFTSCell,          /* Name of function in C++ (must match Python name) */
-            committor_val, rank_in, world_in
+            rank_in, world_in
             );
         };
         
@@ -244,10 +244,6 @@ void export_MLSamplerEXP(py::module& m)
     .def("computeW", &MLSamplerEXP::computeW)
     .def("computeC", &MLSamplerEXP::computeC)
     .def("computeFactors", &MLSamplerEXP::computeFactors)
-    //.def("/runSimulation", &MLSamplerEXP::runSimulation)
-    //.def("propose", &MLSamplerEXP::propose)
-    //.def("acceptReject", &MLSamplerEXP::acceptReject)
-    //.def("move", &MLSamplerEXP::move)
     .def("isProduct", &MLSamplerEXP::isProduct)
     .def("isReactant", &MLSamplerEXP::isReactant)
     .def("getConfig", &MLSamplerEXP::getConfig)
@@ -274,17 +270,13 @@ void export_MLSamplerFTS(py::module& m)
     .def("checkFTSCell", &MLSamplerFTS::checkFTSCell)
     .def("normalizeRejectionCounts", &MLSamplerFTS::normalizeRejectionCounts)
     .def("step_unbiased", &MLSamplerFTS::step_unbiased)
-    //.def("runSimulation", &MLSamplerFTS::runSimulation)
-    //.def("propose", &MLSamplerFTS::propose)
-    //.def("acceptReject", &MLSamplerFTS::acceptReject)
-    //.def("move", &MLSamplerFTS::move)
     .def("isProduct", &MLSamplerFTS::isProduct)
     .def("isReactant", &MLSamplerFTS::isReactant)
     .def("getConfig", &MLSamplerFTS::getConfig)
     .def("dumpConfig", &MLSamplerFTS::dumpConfig)
     .def_readwrite("torch_config", &MLSamplerFTS::torch_config)
     .def_readwrite("steps", &MLSamplerFTS::steps)
-    .def_readwrite("committor_list", &MLSamplerFTS::committor_list)
+    .def_readwrite("distance_sq_list", &MLSamplerFTS::distance_sq_list)
     .def_readwrite("rejection_count", &MLSamplerFTS::rejection_count)
     ;
 };
