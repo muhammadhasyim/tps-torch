@@ -211,7 +211,7 @@ class FTSUpdate(Optimizer):
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
 
-        defaults = dict(deltatau=deltatau, momentum=momentum, nesterov=nesterov, kappa=kappa, freeze=freeze)
+        defaults = dict(lr=deltatau, momentum=momentum, nesterov=nesterov, kappa=kappa, freeze=freeze)
         super(FTSUpdate, self).__init__(params, defaults)
         self.avgconfig = 0
         self.nsamples = 0.0
@@ -261,7 +261,7 @@ class FTSUpdate(Optimizer):
                     else:
                         d_p = buf
 
-                p.add_(d_p, alpha=-group['deltatau'])
+                p.add_(d_p, alpha=-group['lr'])
                 
                 ## (2) Re-parameterization/Projection
                 #Compute the new intermediate nodal variables

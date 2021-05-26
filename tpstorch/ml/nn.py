@@ -1,4 +1,3 @@
-#holds the loss function. And if we get the time, the custom neural net layer with the string path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -686,7 +685,6 @@ class BKELossFTS(_BKELoss):
         
         #Finallly, build the final matrix
         Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))
-        
         #Compute the reweighting factors using an eigensolver
         #w, v = scipy.sparse.linalg.eigs(A=Kmatrix.numpy(),k=1, which='SM')
         v, w = nullspace(Kmatrix.numpy(), atol=1e-6, rtol=0)
