@@ -51,7 +51,7 @@ initoptimizer = ParallelSGD(committor.parameters(), lr=1e-3)#,momentum=0.95, nes
 #from torchsummary import summary
 running_loss = 0.0
 #Initial training try to fit the committor to the initial condition
-for i in range(3*10**3):
+for i in range(10**5):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     # forward + backward + optimize
@@ -86,9 +86,9 @@ bkeloss = BKELossEXP(  bc_sampler = mb_sim_bc,
 
 cmloss = CommittorLoss( cl_sampler = mb_sim_com,
                         committor = committor,
-                        lambda_cl=1.0,
-                        cl_start=10,
-                        cl_end=2000,
+                        lambda_cl=100.0,
+                        cl_start=2000,
+                        cl_end=4000,
                         cl_rate=10,
                         cl_trials=50,
                         batch_size_cl=0.5

@@ -50,7 +50,7 @@ initoptimizer = ParallelSGD(committor.parameters(), lr=1e-3)#,momentum=0.95, nes
 #from torchsummary import summary
 running_loss = 0.0
 #Initial training try to fit the committor to the initial condition
-for i in range(3*10**3):
+for i in range(10**5):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     # forward + backward + optimize
