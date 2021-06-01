@@ -6,7 +6,7 @@ import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
 from tpstorch.ml import MLSamplerEXP
-from mullerbrown_ml import MySampler
+from tpstorch.examples.mullerbrown_ml import MyMLSampler
 import numpy as np
 
 #Import any other thing
@@ -38,7 +38,7 @@ class CommittorNet(nn.Module):
             if param.requires_grad:
                 dist.broadcast(param.data,src=0)
 
-class MullerBrown(MySampler):
+class MullerBrown(MyMLSampler):
     def __init__(self,param,config,rank,dump,beta,kappa,mpi_group,committor,save_config=False):
         super(MullerBrown, self).__init__(param,config.detach().clone(),rank,dump,beta,kappa,mpi_group)
         #super(MullerBrown, self).__init__(config.detach().clone())
@@ -53,6 +53,8 @@ class MullerBrown(MySampler):
         self.config_size = config.size()
         self.flattened_size = config.flatten().size()
         self.torch_config = config
+        #Configs file Save Alternative, since the default XYZ format is an overkill 
+        self.file = open("configs_{}.txt".format(dist.get_rank()), "w")
 
     @torch.no_grad() 
     def initialize_from_torchconfig(self, config):
@@ -125,4 +127,6 @@ class MullerBrown(MySampler):
         self.timestep += 1
         if self.save_config:
             if self.timestep % 100 == 0:
-                self.dumpConfig(0)
+                #self.dumpConfig(0)
+                self.file.write("{} {} \n".format(self.torch_config[0].item(), self.torch_config[1].item()))
+                self.file.flush()
