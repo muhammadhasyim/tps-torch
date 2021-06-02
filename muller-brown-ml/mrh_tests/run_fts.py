@@ -1,3 +1,6 @@
+#import sys
+#sys.path.insert(0,"/global/home/users/muhammad_hasyim/tps-torch/build")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -21,7 +24,7 @@ import tqdm, sys
 torch.manual_seed(0)
 np.random.seed(0)
 
-prefix = 'simple'
+prefix = 'simple_7500'
 
 #Initialize neural net
 def initializer(s):
@@ -30,7 +33,7 @@ start = torch.tensor([-0.5,1.5])
 end = torch.tensor([0.6,0.08])
 
 #Initialize neural net
-committor = CommittorNet(d=2,num_nodes=200).to('cpu')
+committor = CommittorNet(d=2,num_nodes=7500).to('cpu')
 #Initialize the string for FTS method
 ftslayer = FTSLayer(react_config=start,prod_config=end,num_nodes=world_size).to('cpu')
 
@@ -68,8 +71,8 @@ committor.zero_grad()
 
 #Construct FTSSimulation
 n_boundary_samples = 100
-batch_size = 16
-period = 25
+batch_size = 4#16
+period = 100#25
 datarunner = FTSSimulation(mb_sim, committor, period=period, batch_size=batch_size, dimN=2,mode='nonadaptive')
 
 #Initialize main loss function and optimizers
@@ -89,7 +92,7 @@ cmloss = FTSCommittorLoss(  fts_sampler = mb_sim,
                             committor = committor,
                             fts_layer=ftslayer, 
                             dimN = 2,
-                            lambda_fts=100.0,
+                            lambda_fts=1.0,
                             fts_start=200,  
                             fts_end=2000,
                             fts_max_steps=10**8,#batch_size*period*40, #To estimate the committor, we'll run foru times as fast 
@@ -120,7 +123,7 @@ for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
     actual_counter = 0
-    while actual_counter <= 5000:
+    while actual_counter <= 500:
         # get data and reweighting factors
         configs, grad_xs  = datarunner.runSimulation()
         

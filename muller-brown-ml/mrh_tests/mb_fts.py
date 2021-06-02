@@ -20,15 +20,15 @@ class CommittorNet(nn.Module):
         self.d = d
         self.unit = unit
         self.lin1 = nn.Linear(d, num_nodes, bias=True)
-        self.lin3 = nn.Linear(num_nodes, num_nodes, bias=True)
+        #self.lin3 = nn.Linear(num_nodes, num_nodes, bias=True)
         self.lin2 = nn.Linear(num_nodes, 1, bias=False)
         self.broadcast()
 
     def forward(self, x):
         x = self.lin1(x)
         x = self.unit(x)
-        x = self.lin3(x)
-        x = self.unit(x)
+        #x = self.lin3(x)
+        #x = self.unit(x)
         x = self.lin2(x)
         return torch.sigmoid(x)
     
