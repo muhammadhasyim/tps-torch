@@ -354,6 +354,117 @@ class CommittorLoss(_Loss):
         self.cl_loss = self.compute_cl(counter, initial_config)
         return self.cl_loss
 
+class CommittorLoss2(_Loss):
+    r"""Loss function which implements the MSE loss for the committor function. 
+        
+        This loss function automatically collects the committor values through brute-force simulation.
+
+        Args:
+            cl_sampler (tpstorch.MLSampler): the MC/MD sampler to perform unbiased simulations.
+            
+            committor (tpstorch.nn.Module): the committor function, represented as a neural network. 
+            
+            lambda_cl (float): the penalty strength of the MSE loss. Defaults to one. 
+            
+            cl_start (int): iteration number where we start collecting samples for the committor loss. 
+
+            cl_end (int): iteration number where we stop collecting samples for the committor loss
+
+            cl_rate (int): sampling rate for collecting committor samples during the iterations. 
+
+            cl_trials (int): number of trials to compute the committor per initial configuration.
+
+            batch_size_cl (float): size of mini-batch used during training, expressed as the fraction of total batch collected at that point. 
+    """
+    def __init__(self, cl_sampler, committor, lambda_cl=1.0, cl_start=200, cl_end=2000000, cl_rate=100, cl_trials=50, batch_size_cl=0.5):
+        super(CommittorLoss2, self).__init__()
+        
+        self.cl_loss = torch.zeros(1)
+        self.committor = committor 
+
+        self.cl_sampler = cl_sampler
+        self.cl_start = cl_start
+        self.cl_end = cl_end
+        self.lambda_cl = lambda_cl
+        self.cl_rate = cl_rate
+        self.cl_trials = cl_trials
+        self.batch_size_cl = batch_size_cl
+        
+        self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[0], dtype=torch.float) 
+        self.cl_configs_values = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), dtype=torch.float)
+        self.cl_configs_count = 0
+    
+    def runTrials(self, config):
+        counts = []
+        
+        for i in range(self.cl_trials):
+            self.cl_sampler.initialize_from_torchconfig(config.detach().clone())
+            hitting = False
+            #Run simulation and stop until it falls into the product or reactant state
+            steps = 0
+            while hitting is False:
+                if self.cl_sampler.isReactant(self.cl_sampler.getConfig()):
+                    hitting = True
+                    counts.append(0)
+                elif self.cl_sampler.isProduct(self.cl_sampler.getConfig()):
+                    hitting = True
+                    counts.append(1)
+                self.cl_sampler.step_unbiased()
+                steps += 1
+        return np.array(counts)
+    
+    def compute_cl(self,counter,initial_config):
+        """Computes the committor loss function 
+            TO DO: Complete this docstrings 
+        """
+        #Initialize loss to zero
+        loss_cl = torch.zeros(1)
+        
+        if ( counter < self.cl_start):
+            #Not the time yet to compute the committor loss
+            return loss_cl
+        elif (counter==self.cl_start):
+            
+            #Generate the first committor sample
+            counts = self.runTrials(initial_config)
+            print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+            
+            #Save the committor values and initial configuration 
+            self.cl_configs_values[0] = np.mean(counts) 
+            self.cl_configs[0] = initial_config.detach().clone()
+            self.cl_configs_count += 1
+            
+            # Now compute loss
+            committor_penalty = torch.mean((self.committor(self.cl_configs[0])-self.cl_configs_values[0]))
+            loss_cl += 0.5*self.lambda_cl*committor_penalty**2
+            #Collect all the results
+            dist.all_reduce(loss_cl)
+            return loss_cl/_world_size
+        else:
+            if counter % self.cl_rate==0 and counter < self.cl_end:
+                # Generate new committor configs and keep on generating the loss
+                counts = self.runTrials(initial_config)
+                print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+                configs_count = self.cl_configs_count
+                self.cl_configs_values[configs_count] = np.mean(counts) 
+                self.cl_configs[configs_count] = initial_config.detach().clone()
+                self.cl_configs_count += 1
+            
+            # Compute loss by sub-sampling however many batches we have at the moment
+            indices_committor = torch.randperm(self.cl_configs_count)[:int(self.batch_size_cl*self.cl_configs_count)]
+            if self.cl_configs_count == 1:
+                indices_committor = 0
+            committor_penalty = torch.mean((self.committor(self.cl_configs[indices_committor])-self.cl_configs_values[indices_committor]))
+            loss_cl += 0.5*self.lambda_cl*committor_penalty**2
+            
+            #Collect all the results
+            dist.all_reduce(loss_cl)
+            return loss_cl/_world_size
+    
+    def forward(self, counter, initial_config):
+        self.cl_loss = self.compute_cl(counter, initial_config)
+        return self.cl_loss
+
 
 class _BKELoss(_Loss):
     r"""Base classs for computing the loss function corresponding to the variational form 
