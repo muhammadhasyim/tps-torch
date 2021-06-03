@@ -50,15 +50,16 @@ string_list = []
 for i in range(0,20000,4):
     string_list.append("simple_params_t_"+str(i)+"_0")
 
-values = np.genfromtxt("../../analysis_scripts/values_of_interest.txt")
-q_fem = np.genfromtxt("../../analysis_scripts/zz_structured.txt")
+values = np.genfromtxt("values_of_interest.txt")
+q_fem = np.genfromtxt("zz_structured.txt")
 indices = np.nonzero(values)
 
 integral_eq = np.zeros((len(string_list),))
-q_eq = np.zeros((len(string_list),))
+q_eq = np.zeros((len(string_list),2))
 f = open("energies_data.txt", 'a+')
 f2 = open("q_int_data.txt", 'a+')
 for frame in range(len(string_list)):
+    print(frame)
     zz = np.zeros_like(xx)
     committor.load_state_dict(torch.load(string_list[frame]))
     grad_2_zz = np.zeros_like(xx)
@@ -74,10 +75,10 @@ for frame in range(len(string_list)):
     integral_eq[frame] = simps(simps(grad_2_zz*np.exp(-1.0*energies),points_y),points_x)
     f.write("{:.5e}\n".format(integral_eq[frame]))
 
-    q_metric = values[indices]*np.abs(qvals[indices]-q_fem[indices])
+    q_metric = values[indices]*np.abs(zz[indices]-q_fem[indices])
     q_int = np.array((np.mean(q_metric),np.std(q_metric)/len(q_metric)**0.5))
-    q_eq[frame] = q_int
-    f2.write("{:.5e}\n".format(q_int))
+    q_eq[frame,:] = q_int[:]
+    f2.write("{:.5e} {:.5E}\n".format(q_eq[frame,0],q_eq[frame,1]))
 
 np.savetxt("energies_time.txt", energies)
 np.savetxt("q_time.txt", energies)
