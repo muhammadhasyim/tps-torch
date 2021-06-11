@@ -5,7 +5,7 @@ import torch.nn as nn
 #Import necessarry tools from tpstorch 
 from tpstorch.ml.data import FTSSimulation
 from tpstorch.ml.optim import ParallelAdam, FTSUpdate, ParallelSGD
-from tpstorch.ml.nn import BKELossFTS, FTSCommittorLoss, FTSLayer
+from tpstorch.ml.nn import BKELossFTS, FTSCommittorLoss, CommittorLoss2, FTSLayer
 from brownian_ml_fts import CommittorNet, BrownianParticle
 import numpy as np
 
@@ -21,7 +21,7 @@ import tqdm, sys
 torch.manual_seed(0)
 np.random.seed(0)
 
-prefix = 'fts'
+prefix = 'fts_cl'
 
 #Set initial configuration and BP simulator
 start = torch.tensor([[-1.0]])
@@ -41,11 +41,11 @@ bp_sampler_bc = BrownianParticle(dt=5e-3,ftslayer=ftslayer, gamma=1.0,kT=kT, ini
 
 committor.load_state_dict(torch.load("initial_nn"))
 
-
 #Construct EXPSimulation
 batch_size = 4
 period = 100
-datarunner = FTSSimulation(bp_sampler, committor, period=period, batch_size=batch_size, dimN=1)#,mode='adaptive',min_count=250)#,max_period=100)#,max_steps=10**3)#,max_period=10)
+datarunner = FTSSimulation(bp_sampler, committor, period=period, batch_size=batch_size, dimN=1)
+#,mode='adaptive',min_rejection_count=1)#,max_period=100)#,max_steps=10**3)#,max_period=10)
 
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
 loss = BKELossFTS(  bc_sampler = bp_sampler_bc,
@@ -60,14 +60,25 @@ loss = BKELossFTS(  bc_sampler = bp_sampler_bc,
                     tol = 2e-9,
                     mode='shift')
 
+cmloss = CommittorLoss2( cl_sampler = bp_sampler_bc,
+                        committor = committor,
+                        lambda_cl=100.0,
+                        cl_start=10,
+                        cl_end=5000,
+                        cl_rate=40,
+                        cl_trials=100,
+                        batch_size_cl=0.5
+                        )
+
 #optimizer = ParallelAdam(committor.parameters(), lr=5e-3)#, momentum=0.90,weight_decay=1e-3
-optimizer = ParallelSGD(committor.parameters(), lr=5e-4,momentum=0.95)
+optimizer = ParallelSGD(committor.parameters(), lr=5e-4,momentum=0.95)#,nesterov=True)
 ftsoptimizer = FTSUpdate(committor.lin1.parameters(), deltatau=1e-2,momentum=0.9,nesterov=True,kappa=0.1)
 
 #Save loss function statistics
 loss_io = []
 if _rank == 0:
     loss_io = open("{}_loss.txt".format(prefix),'w')
+
 #Save timing statistics
 import time
 time_io = open("{}_timing_{}.txt".format(prefix,rank),'w')
@@ -84,7 +95,7 @@ for epoch in range(1):
         t1 = time.time()
         
         sampling_time = t1-t0
-
+        
         t0 = time.time()
         
         # zero the parameter gradients
@@ -92,12 +103,22 @@ for epoch in range(1):
         
         # (2) Update the neural network
         cost = loss(grad_xs, bp_sampler.rejection_count)
-        cost.backward()
-        optimizer.step()
         t1 = time.time()
         optimization_time = t1-t0
+
+        t0 = time.time()
+        cmcost = cmloss(actual_counter, bp_sampler.getConfig())
+        t1 = time.time()
+        supervised_time = t1-t0
         
-        time_io.write('{:d} {:.5E} {:.5E} \n'.format(actual_counter+1,sampling_time, optimization_time))#main_loss.item(),bc_loss.item()))
+        t0 = time.time()
+        totalcost = cost+cmcost
+        totalcost.backward()
+        optimizer.step()
+        t1 = time.time()
+        optimization_time += t1-t0
+        
+        time_io.write('{:d} {:.5E} {:.5E} {:.5E} \n'.format(actual_counter+1,sampling_time, optimization_time, supervised_time))#main_loss.item(),bc_loss.item()))
         time_io.flush()
         
         # print statistics
@@ -114,13 +135,13 @@ for epoch in range(1):
             
             if _rank == 0:
                 #Print statistics 
-                print('[{}] main_loss: {:.5E} bc_loss: {:.5E} lr: {:.3E} period: {:.3f}'.format(actual_counter + 1, main_loss.item(), bc_loss.item(), optimizer.param_groups[0]['lr'], test.item()),flush=True)
+                print('[{}] main_loss: {:.5E} bc_loss: {:.5E} fts_loss: {:.5E} lr: {:.3E} period: {:.3f}'.format(actual_counter + 1, main_loss.item(), bc_loss.item(), cmcost.item(), optimizer.param_groups[0]['lr'], test.item()),flush=True)
                 print(ftslayer.string,flush=True)
                 
                 #Also print the reweighting factors
                 print(loss.zl)
                 
-                loss_io.write('{:d} {:.5E} {:.5E} \n'.format(actual_counter+1,main_loss.item(),bc_loss.item()))
+                loss_io.write('{:d} {:.5E} {:.5E} {:.5E} \n'.format(actual_counter+1,main_loss.item(),bc_loss.item(),cmcost.item()))
                 loss_io.flush()
                 
                 torch.save(committor.state_dict(), "{}_params_t_{}_{}".format(prefix,actual_counter,rank))
