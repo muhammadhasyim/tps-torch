@@ -198,6 +198,7 @@ class ParallelSGD(Optimizer):
 
         return loss
 
+
 class FTSUpdate(Optimizer):
     r"""Implements the Finite-Temperature String Method update. 
     
@@ -268,7 +269,7 @@ class FTSUpdate(Optimizer):
                 #which doesn't obey equal arc-length parametrization
                 
                 alpha = torch.linspace(0,1,_world_size)
-                ell_k = torch.norm(p[1:]-p[:-1],dim=1)
+                ell_k = torch.norm(p[1:].clone()-p[:-1].clone(),dim=1)
                 ellsum = torch.sum(ell_k)
                 ell_k /= ellsum
                 intm_alpha = torch.zeros_like(alpha)
@@ -279,20 +280,21 @@ class FTSUpdate(Optimizer):
                 #of the desired  configuration,
                 #Now interpolate back to the correct parametrization
                 newstring = torch.zeros_like(p)
-                newstring[0] = p[0]
-                newstring[-1] = p[-1]
+                newstring[0] = p[0].clone()/_world_size
+                newstring[-1] = p[-1].clone()/_world_size
                 if _rank > 0 and _rank < _world_size-1:
                     index = torch.bucketize(alpha[_rank],intm_alpha)
                     weight = (alpha[_rank]-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
                     if index == _rank+1:
-                        newstring[_rank] = torch.lerp(p[_rank],p[_rank+1],weight) 
+                        newstring[_rank] = torch.lerp(p[_rank].clone(),p[_rank+1].clone(),weight) 
                     elif index == _rank:
-                        newstring[_rank] = torch.lerp(p[_rank-1],p[_rank],weight) 
+                        newstring[_rank] = torch.lerp(p[_rank-1].clone(),p[_rank].clone(),weight) 
                     elif index == _rank-1:
-                        newstring[_rank] = torch.lerp(p[_rank-2],p[_rank],weight) 
+                        newstring[_rank] = torch.lerp(p[_rank-2].clone(),p[_rank].clone(),weight) 
                     else:
                         raise RuntimeError("Rank [{}]: You need to interpolate from points beyond your nearest neighbors. \n \
                                             Reduce your timestep for the string update!".format(_rank))
                 dist.all_reduce(newstring)
-                p = newstring.clone().detach()
+                p.zero_()
+                p.add_(newstring.clone().detach())
                 del newstring
