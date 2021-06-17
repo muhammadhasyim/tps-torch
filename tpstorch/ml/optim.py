@@ -198,6 +198,115 @@ class ParallelSGD(Optimizer):
 
         return loss
 
+class FTSImplicitUpdate(Optimizer):
+    r"""Implements the Finite-Temperature String Method update, which is all implicit. This provides larger region in stability 
+    
+    
+    """
+
+    def __init__(self, params, sampler=required, deltatau=required, dimN=required, kappa = 0.1, freeze=False):
+        if deltatau is not required and deltatau < 0.0:
+            raise ValueError("Invalid step size: {}".format(deltatau))
+
+        defaults = dict(lr=deltatau, kappa=kappa, freeze=freeze)
+        super(FTSImplicitUpdate, self).__init__(params, defaults)
+        self.avgconfig = 0
+        self.nsamples = 0.0
+        
+        # Matrix used for inversing
+        # Construct only on rank 0
+        # Note that it always stays the same, so invert here and use at each iteration
+        # Kinda confusing notation, but essentially to make this tridiagonal order is
+        # we go through each direction in order
+        # zeros
+        self.matrix = torch.zeros(dimN*_world_size, dimN*_world_size, dtype=torch.float)
+        # first, last row
+        #for i in range(dimN):
+        #    self.matrix[i*_world_size,i*_world_size] = 1.0+deltatau
+        #    self.matrix[(i+1)*_world_size-1,(i+1)*_world_size-1] = 1.+deltatau
+        # rest of rows
+        shape = _world_size-1
+        # first, last row
+        #Go through for every node
+        torch.set_printoptions(threshold=10000)
+        self.matrix = torch.zeros(dimN*_world_size, dimN*_world_size, dtype=torch.float)
+        # first, last row
+        for i in range(dimN):
+            self.matrix[i*_world_size,i*_world_size] = 1.0+deltatau
+            self.matrix[(i+1)*_world_size-1,(i+1)*_world_size-1] = 1.0+deltatau
+        # rest of rows
+        for i in range(dimN):
+            for j in range(1,_world_size-1):
+                self.matrix[i*_world_size+j,i*_world_size+j] = 1.0+deltatau+2.0*kappa*deltatau*_world_size
+                self.matrix[i*_world_size+j,i*_world_size+j-1] = -1.0*kappa*deltatau*_world_size
+                self.matrix[i*_world_size+j,i*_world_size+j+1] = -1.0*kappa*deltatau*_world_size
+
+        self.dimN = dimN
+        self.matrix_inverse = torch.inverse(self.matrix)
+    def __setstate__(self, state):
+        super(FTSImplicitUpdate, self).__setstate__(state)
+
+    @torch.no_grad()
+    def step(self, configs, batch_size):
+        """Performs a single optimization step.
+
+        """
+
+        for group in self.param_groups:
+            kappa = group['kappa']
+            freeze = group['freeze']
+
+            for p in group['params']:
+                if p.requires_grad is True:
+                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
+
+                ## (1) Compute the average configuration
+                avgconfig = torch.zeros_like(p)
+                avgconfig[_rank] = torch.mean(configs,dim=0)
+                dist.all_reduce(avgconfig)
+                
+                ## (1) Implicit Stochastic Gradient Descent
+                force = p.clone()+group['lr']*(avgconfig)#[1:-1]
+                #if _rank == 0:
+                #    print(p)
+                p.zero_()
+                p.add_(torch.matmul(self.matrix_inverse, force.t().flatten()).view(-1,_world_size).t())#.clone().detach()
+                
+                ## (2) Re-parameterization/Projection
+                #Compute the new intermediate nodal variables
+                #which doesn't obey equal arc-length parametrization
+                
+                alpha = torch.linspace(0,1,_world_size)
+                ell_k = torch.norm(p[1:].clone()-p[:-1].clone(),dim=1)
+                ellsum = torch.sum(ell_k)
+                ell_k /= ellsum
+                intm_alpha = torch.zeros_like(alpha)
+                for i in range(1, p.shape[0]):
+                    intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
+                
+                #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
+                #of the desired  configuration,
+                #Now interpolate back to the correct parametrization
+                newstring = torch.zeros_like(p)
+                newstring[0] = p[0].clone()/_world_size
+                newstring[-1] = p[-1].clone()/_world_size
+                if _rank > 0 and _rank < _world_size-1:
+                    index = torch.bucketize(alpha[_rank],intm_alpha)
+                    weight = (alpha[_rank]-intm_alpha[index-1])/(intm_alpha[index]-intm_alpha[index-1])
+                    if index == _rank+1:
+                        newstring[_rank] = torch.lerp(p.clone()[_rank],p.clone()[_rank+1],weight) 
+                    elif index == _rank:
+                        newstring[_rank] = torch.lerp(p.clone()[_rank-1],p.clone()[_rank],weight) 
+                    elif index == _rank-1:
+                        newstring[_rank] = torch.lerp(p.clone()[_rank-2],p.clone()[_rank],weight) 
+                    else:
+                        raise RuntimeError("Rank [{}]: You need to interpolate from points beyond your nearest neighbors. \n \
+                                            Reduce your timestep for the string update!".format(_rank))
+                dist.all_reduce(newstring)
+                p.zero_()
+                p.add_(newstring.clone().detach())
+                
+                del newstring
 
 class FTSUpdate(Optimizer):
     r"""Implements the Finite-Temperature String Method update. 
