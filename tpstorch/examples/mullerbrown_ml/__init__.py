@@ -4,6 +4,9 @@ from . import _mullerbrown_ml
 #Just something to pass the class
 class MyMLSampler(_mullerbrown_ml.MySampler):
     pass
+#Just something to pass the class
+class MyMLEXPStringSampler(_mullerbrown_ml.MySamplerEXPString):
+    pass
 
 #Just something to pass the class
 class MyMLFTSSampler(_mullerbrown_ml.MySamplerFTS):

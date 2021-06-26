@@ -205,6 +205,60 @@ void MullerBrown::MCStepBiasAR(float* state_trial, float committor_, bool onlyts
     //}
 }
 
+
+void MullerBrown::MCStepBiasProposeString(float* state_trial, float dr_sq) {
+    generator = Saru(seed_base, count_step++); 
+    state_trial[0] = state[0][0] + lambda*generator.d(-1.0,1.0);
+    state_trial[1] = state[0][1] + lambda*generator.d(-1.0,1.0);
+    phi = Energy(state);
+    phi_umb = 0.5*k_umb*dr_sq;
+}
+
+void MullerBrown::MCStepBiasARString(float* state_trial, float dr_sq, bool onlytst, bool bias) {
+    // Calculate energy difference from bias
+    float phi_ = Energy(state_trial); 
+    float phi_diff = phi_-phi;
+    float phi_umb_ = 0.5*k_umb*dr_sq;
+    //committor_diff*committor_diff;
+    if(bias){
+        phi_diff += phi_umb_ - phi_umb;
+    }
+    if(phi_diff < 0) {
+        // accept
+        state[0][0] = state_trial[0];
+        state[0][1] = state_trial[1];
+        phi = phi_;
+        phi_umb = phi_umb_;
+    }
+    else if(generator.d() < exp(-phi_diff/temp)) {
+        // still accept, just a little more work
+        state[0][0] = state_trial[0];
+        state[0][1] = state_trial[1];
+        phi = phi_;
+        phi_umb = phi_umb_;
+    }
+    else {
+        // reject
+        steps_rejected++;
+    }
+    steps_tested++;
+    //if((count_step%500==0) && (count_step>0)) {
+        ////Adjust lambda for optimal acceptance/rejectance
+        //double ratio = double(steps_rejected)/double(steps_tested);
+        //if(ratio < 0.5) {
+            //lambda *= 1.2;
+        //}
+        //else if(ratio > 0.7) {
+            //lambda *= 0.8;
+        //}
+        //steps_rejected = 0;
+        //steps_tested = 0;
+    //}
+}
+
+
+
+
 void MullerBrown::Simulate(int steps) {
     steps_tested = 0;
     steps_rejected = 0;
