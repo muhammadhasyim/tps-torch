@@ -151,6 +151,7 @@ class MLSamplerEXP
         //Umbrella potential constant 
         double kappa;
         
+        
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerEXP(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
@@ -225,6 +226,7 @@ class MLSamplerEXP
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
+        
         /*
         virtual void runSimulation(int nsteps)
         {
@@ -301,17 +303,44 @@ class MLSamplerEXPString
 
         //Umbrella potential constant 
         double kappa;
+        //Total number of rejections due to going out of the boxes
+        torch::Tensor rejection_count;
+        
+        //Total number of steps taken during simulation
+        double steps; 
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
         MLSamplerEXPString(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
-                invkT(0), kappa(0), m_mpi_group(mpi_group)
+                invkT(0), kappa(0), steps(0), m_mpi_group(mpi_group)
         {
             //Turn on the requires grad by default
             torch_config.requires_grad_();
             distance_sq_list = torch::linspace(0,1,mpi_group->getSize());
+            rejection_count = torch::zeros(mpi_group->getSize());
         };
         virtual ~MLSamplerEXPString(){};
+        
+        //Check whether you are in the cell or not 
+        virtual bool checkFTSCell(const int& rank_in, const int& world_in)
+        {
+            torch::NoGradGuard no_grad_guard;
+            steps += 1.0;
+            if( torch::argmin(distance_sq_list).item<int>()  == rank_in)
+            {
+                return true;
+            }
+            else
+            {
+                rejection_count[torch::argmin(distance_sq_list).item<int>()] += 1;
+                return false;
+            }
+        };
+        
+       virtual void normalizeRejectionCounts()
+       {
+           rejection_count.div_(steps);
+       }; 
         
         //Default time-stepper for doing the biased simulations 
         virtual void step(const double& committor_val, bool onlytst = false)

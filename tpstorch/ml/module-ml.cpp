@@ -351,6 +351,24 @@ class PyMLSamplerEXPString : public MLSamplerEXPString
                 );
             //Do nothing for now
         };
+        bool checkFTSCell(const int& rank_in, const int& world_in) override
+        {
+        PYBIND11_OVERRIDE(
+            bool, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            checkFTSCell,          /* Name of function in C++ (must match Python name) */
+            rank_in, world_in
+            );
+        };
+        
+        virtual void normalizeRejectionCounts() override
+        {
+        PYBIND11_OVERRIDE(
+            void, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            normalizeRejectionCounts,          /* Name of function in C++ (must match Python name) */
+            );
+        };
 
 };
 
@@ -534,6 +552,8 @@ void export_MLSamplerEXPString(py::module& m)
     .def("computeW", &MLSamplerEXPString::computeW)
     .def("computeC", &MLSamplerEXPString::computeC)
     .def("computeFactors", &MLSamplerEXPString::computeFactors)
+    .def("checkFTSCell", &MLSamplerEXPString::checkFTSCell)
+    .def("normalizeRejectionCounts", &MLSamplerEXPString::normalizeRejectionCounts)
     .def("isProduct", &MLSamplerEXPString::isProduct)
     .def("isReactant", &MLSamplerEXPString::isReactant)
     .def("getConfig", &MLSamplerEXPString::getConfig)
@@ -541,6 +561,8 @@ void export_MLSamplerEXPString(py::module& m)
     .def("dumpConfig", &MLSamplerEXPString::dumpConfig)
     .def_readwrite("torch_config", &MLSamplerEXPString::torch_config)
     .def_readwrite("fwd_weightfactor", &MLSamplerEXPString::fwd_weightfactor)
+    .def_readwrite("rejection_count", &MLSamplerEXPString::rejection_count)
+    .def_readwrite("steps", &MLSamplerEXPString::steps)
     .def_readwrite("bwrd_weightfactor", &MLSamplerEXPString::bwrd_weightfactor)
     .def_readwrite("reciprocal_normconstant", &MLSamplerEXPString::reciprocal_normconstant)
     .def_readwrite("distance_sq_list", &MLSamplerEXPString::distance_sq_list)
