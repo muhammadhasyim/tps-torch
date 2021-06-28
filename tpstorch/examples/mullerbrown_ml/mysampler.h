@@ -115,14 +115,27 @@ class MySamplerEXPString : public MLSamplerEXPString
             torch_config.requires_grad_();
         };
         ~MySamplerEXPString(){}; 
+        
+        void propose(torch::Tensor& state, const double& committor_val, bool onlytst = false)
+        {
+            float* state_sys = state.data_ptr<float>();
+            system->committor = float(committor_val);
+            system->MCStepBiasPropose(state_sys, onlytst);
+        };
 
-        void propose(torch::Tensor& state, const double& dr_sq, bool onlytst = false)
+        void acceptReject(const torch::Tensor& state)
+        {
+            float* state_sys = state.data_ptr<float>();
+            system->MCStepBiasAR(state_sys, 0.0, false, false);
+        };
+
+        void proposeString(torch::Tensor& state, const double& dr_sq, bool onlytst = false)
         {
             float* state_sys = state.data_ptr<float>();
             system->MCStepBiasProposeString(state_sys, dr_sq);
         };
 
-        void acceptReject(const torch::Tensor& state, const double& dr_sq, bool onlytst = false, bool bias = false)
+        void acceptRejectString(const torch::Tensor& state, const double& dr_sq, bool onlytst = false, bool bias = false)
         {
             float* state_sys = state.data_ptr<float>();
             system->MCStepBiasARString(state_sys, dr_sq, onlytst, bias);
