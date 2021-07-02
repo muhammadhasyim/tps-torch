@@ -133,12 +133,12 @@ class FTSCommittorLoss(_Loss):
         #Add tolerance values to the off-diagonal elements
         if self.mode == 'shift':
             if _rank == 0:
-                Kmatrix[_rank+1] = self.tol
+                Kmatrix[_rank+1] += self.tol
             elif _rank == _world_size-1:
-                Kmatrix[_rank-1] = self.tol
+                Kmatrix[_rank-1] += self.tol
             else:
-                Kmatrix[_rank-1] = self.tol
-                Kmatrix[_rank+1] = self.tol
+                Kmatrix[_rank-1] += self.tol
+                Kmatrix[_rank+1] += self.tol
         
         #All reduce to collect the results
         dist.all_reduce(Kmatrix)
@@ -589,6 +589,152 @@ class _BKELoss(_Loss):
         self.bc_loss = self.compute_bc()
         return self.bc_loss
 
+class BKELossEMUS(_BKELoss):
+    r"""Loss function corresponding to the variational form of the Backward Kolmogorov Equation, 
+        which includes reweighting by exponential (EXP) averaging. 
+
+    Args:
+        bc_sampler (tpstorch.MLSamplerEXP): the MD/MC sampler used for obtaining configurations in 
+            product and reactant basin.  
+        
+        committor (tpstorch.nn.Module): the committor function, represented as a neural network. 
+        
+        lambda_A (float): penalty strength for enforcing boundary conditions at the reactant basin. 
+        
+        lambda_B (float): penalty strength for enforcing boundary conditions at the product basin. 
+            If None is given, lambda_B=lambda_A
+        
+        start_react (torch.Tensor): starting configuration to sample reactant basin. 
+        
+        start_prod (torch.Tensor): starting configuration to sample product basin.
+       
+        n_bc_samples (int, optional): total number of samples to collect at both product and 
+            reactant basin. 
+
+        bc_period (int, optional): the number of timesteps to collect one configuration during 
+            sampling at either product and reactant basin.
+
+        batch_size_bc (float, optional): size of mini-batch for the boundary condition loss during 
+            gradient descent, expressed as fraction of n_bc_samples.
+
+        mode (string, optional): the mode for EXP reweighting. If mode is 'random', then the 
+            reference umbrella window is chosen randomly at every iteration. If it's not random, 
+            then ref_index must be supplied.
+
+        ref_index (int, optional): a fixed chosen umbrella window for computing the reweighting 
+            factors. 
+    """
+
+    def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
+            start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=2e-9):#mode='shift',tol=2e-9): 
+        super(BKELossEMUS, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                                        start_prod, n_bc_samples, bc_period, batch_size_bc)
+        self.tol = tol
+        #self.mode = mode
+        #if mode != 'noshift' and mode != 'shift':
+        #    raise RuntimeError("The only available modes are 'shift' or 'noshift'!")
+    
+    @torch.no_grad()
+    def computeZl(self, overlapprob_rows):
+        
+        #Set the row according to rank
+        Kmatrix = torch.zeros(_world_size,_world_size)
+        Kmatrix[_rank] = torch.mean(overlapprob_rows,dim=0)#rejection_counts
+        
+	#Add tolerance values to the off-diagonal elements
+        #if self.mode == 'shift':
+        #    if _rank == 0:
+        #        Kmatrix[_rank+1] += self.tol
+        #    elif _rank == _world_size-1:
+        #        Kmatrix[_rank-1] += self.tol
+        #    else:
+        #        Kmatrix[_rank-1] += self.tol
+        #        Kmatrix[_rank+1] += self.tol
+	
+        #All reduce to collect the results
+        dist.all_reduce(Kmatrix)
+        #Finallly, build the final matrix
+        Kmatrix = Kmatrix.t()-torch.eye(_world_size)#diag(torch.sum(Kmatrix,dim=1))#-self.tol)
+        #Compute the reweighting factors using an eigensolver
+        v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
+        try:
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        except:
+            #Shift value may not be small enough so we choose a default higher tolerance detection
+            v, w = nullspace(Kmatrix.numpy(), atol=10**(-5), rtol=0)
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        
+        #Normalize
+        zl = zl/np.sum(zl)  
+        return zl
+    
+    def compute_bkeloss(self, gradients, inv_normconstants, overlapprob_rows):#fwd_weightfactors, bwrd_weightfactors):
+        """Computes the loss corresponding to the varitional form of the BKE including 
+            the EXP reweighting factors. 
+            
+            Independent computation is first done on individual MPI process. First, we compute 
+            the following quantities at every 'l'-th MPI process: 
+
+            .. math::
+                L_l = \frac{1}{2} \sum_{x \in M_l} |\grad q(x)|^2/c(x) ,
+                
+                c_l = \sum_{ x \in M_l} 1/c(x) ,
+            
+            where :math: $M_l$ is the mini-batch collected by the l-th MPI
+            process. We then collect the computation to compute the main loss as
+
+            .. math::
+                \ell_{main} = \frac{\sum_{l=1}^{S-1} L_l z_l)}{\sum_{l=1}^{S-1} c_l z_l)}
+            where :math: 'S' is the MPI world size. 
+
+            Args:
+                gradients (torch.Tensor): mini-batch of \grad q(x). First dimension is the size of
+                    the mini-batch while the second is system size (flattened).
+                
+                inv_normconstants (torch.Tensor): mini-batch of 1/c(x).
+
+                fwd_weightfactors (torch.Tensor): mini-batch of w_{l+1}/w_{l}, which are forward 
+                    ratios of the umbrella potential Boltzmann factors stored by the l-th umbrella 
+                    window/MPI process
+                
+                bwrd_weightfactors (torch.Tensor): mini-batch of w_{l-1}/w_{l}, which are forward 
+                    ratios of the umbrella potential Boltzmann factors stored by the l-th umbrella 
+                    window/MPI process
+            
+            Note that PyTorch does not track arithmetic operations during MPI
+            collective calls. Thus, the last sum containing L_l is not reflected 
+            in the computational graph tracked by individual MPI process. The 
+            final gradients will be collected in each respective optimizer.
+        """
+        main_loss = torch.zeros(1) 
+        
+        #Compute the first part of the loss
+        #main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*inv_normconstants.view(-1,1),dim=0));
+        
+        main_loss = 0.5*torch.sum(((gradients*gradients).t() @ inv_normconstants)/len(inv_normconstants))
+        #print(((gradients*gradients).t() @ inv_normconstants).shape,inv_normconstants.view(-1,1).shape)
+        #Computing the reweighting factors, z_l in  our notation
+        self.zl = self.computeZl(overlapprob_rows)#fwd_weightfactors, bwrd_weightfactors)
+        
+        #Use it first to compute the mean inverse normalizing constant 
+        mean_recipnormconst = torch.mean(inv_normconstants)
+        mean_recipnormconst.mul_(self.zl[_rank])
+        #All reduce the mean invnormalizing constant
+        dist.all_reduce(mean_recipnormconst)
+        
+        #renormalize main_loss
+        main_loss *= self.zl[_rank]
+        dist.all_reduce(main_loss)
+        main_loss /= mean_recipnormconst
+        return main_loss
+
+    def forward(self, gradients, inv_normconstants, overlapprob_rows):#fwd_weightfactors, bwrd_weightfactors):
+        self.main_loss = self.compute_bkeloss(gradients, inv_normconstants, overlapprob_rows)#fwd_weightfactors, bwrd_weightfactors)
+        self.bc_loss = self.compute_bc()
+        return self.main_loss+self.bc_loss
+
 class BKELossEXP(_BKELoss):
     r"""Loss function corresponding to the variational form of the Backward Kolmogorov Equation, 
         which includes reweighting by exponential (EXP) averaging. 
@@ -725,8 +871,10 @@ class BKELossEXP(_BKELoss):
         main_loss = torch.zeros(1) 
         
         #Compute the first part of the loss
-        main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*inv_normconstants.view(-1,1),dim=0));
+        #main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*inv_normconstants.view(-1,1),dim=0));
         
+        main_loss = 0.5*torch.sum(((gradients*gradients).t() @ inv_normconstants)/len(inv_normconstants))
+        #print(((gradients*gradients).t() @ inv_normconstants).shape,inv_normconstants.view(-1,1).shape)
         #Computing the reweighting factors, z_l in  our notation
         self.zl = self.computeZl(fwd_weightfactors, bwrd_weightfactors)
         
@@ -809,17 +957,17 @@ class BKELossFTS(_BKELoss):
 	#Add tolerance values to the off-diagonal elements
         if self.mode == 'shift':
             if _rank == 0:
-                Kmatrix[_rank+1] = self.tol
+                Kmatrix[_rank+1] += self.tol
             elif _rank == _world_size-1:
-                Kmatrix[_rank-1] = self.tol
+                Kmatrix[_rank-1] += self.tol
             else:
-                Kmatrix[_rank-1] = self.tol
-                Kmatrix[_rank+1] = self.tol
+                Kmatrix[_rank-1] += self.tol
+                Kmatrix[_rank+1] += self.tol
         
 	#All reduce to collect the results
         dist.all_reduce(Kmatrix)
         #Finallly, build the final matrix
-        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1)-self.tol)
+        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1))#-self.tol)
         #Compute the reweighting factors using an eigensolver
         v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
         try:

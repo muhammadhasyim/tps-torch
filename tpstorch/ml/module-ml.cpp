@@ -233,6 +233,266 @@ class PyMLSamplerFTS : public MLSamplerFTS
 
 };
 
+//Trampoline class for proper inheritance behavior in the Python side
+class PyMLSamplerEXPString : public MLSamplerEXPString
+{
+    public:
+        using MLSamplerEXPString::MLSamplerEXPString;
+        
+        //Default constructor creates 3x3 identity matrix
+        virtual void step(const double& committor_val, bool onlytst = false) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            step,          /* Name of function in C++ (must match Python name) */
+            committor_val, onlytst      /* Argument(s) */
+            );
+        };
+        
+        virtual void step_unbiased() override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            step_unbiased,          /* Name of function in C++ (must match Python name) */
+            );
+        };
+        
+        virtual void step_bc(bool reactant) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            step_bc,          /* Name of function in C++ (must match Python name) */
+            reactant
+            );
+        };
+        
+        virtual bool isProduct(const torch::Tensor& config) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            bool, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            isProduct,          /* Name of function in C++ (must match Python name) */
+            config
+            );
+        };
+        
+        virtual bool isReactant(const torch::Tensor& config) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            bool, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            isReactant,          /* Name of function in C++ (must match Python name) */
+            config
+            );
+        };
+        
+        torch::Tensor computeW(int index) override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                computeW,          /* Name of function in C++ (must match Python name) */
+                index
+                );
+            //Do nothing for now
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        torch::Tensor computeC() override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                computeC          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        void computeFactors() 
+        {
+            PYBIND11_OVERRIDE(
+                void, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                computeFactors          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        virtual torch::Tensor getConfig() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                torch::Tensor, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                getConfig,          /* Name of function in C++ (must match Python name) */
+                );
+        };
+        
+        virtual void setConfig(const torch::Tensor& config) override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                setConfig,          /* Name of function in C++ (must match Python name) */
+                config
+                );
+        };
+
+        virtual void dumpConfig() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEXPString,      /* Parent class */
+                dumpConfig,          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for now
+        };
+        bool checkFTSCell(const int& rank_in, const int& world_in) override
+        {
+        PYBIND11_OVERRIDE(
+            bool, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            checkFTSCell,          /* Name of function in C++ (must match Python name) */
+            rank_in, world_in
+            );
+        };
+        
+        virtual void normalizeRejectionCounts() override
+        {
+        PYBIND11_OVERRIDE(
+            void, /* Return type */
+            MLSamplerEXPString,      /* Parent class */
+            normalizeRejectionCounts,          /* Name of function in C++ (must match Python name) */
+            );
+        };
+
+};
+
+//Trampoline class for proper inheritance behavior in the Python side
+class PyMLSamplerEMUSString : public MLSamplerEMUSString
+{
+    public:
+        using MLSamplerEMUSString::MLSamplerEMUSString;
+        
+        //Default constructor creates 3x3 identity matrix
+        virtual void step(const double& committor_val, bool onlytst = false) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEMUSString,      /* Parent class */
+            step,          /* Name of function in C++ (must match Python name) */
+            committor_val, onlytst      /* Argument(s) */
+            );
+        };
+        
+        virtual void step_unbiased() override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEMUSString,      /* Parent class */
+            step_unbiased,          /* Name of function in C++ (must match Python name) */
+            );
+        };
+        
+        virtual void step_bc(bool reactant) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            void, /* Return type */
+            MLSamplerEMUSString,      /* Parent class */
+            step_bc,          /* Name of function in C++ (must match Python name) */
+            reactant
+            );
+        };
+        
+        virtual bool isProduct(const torch::Tensor& config) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            bool, /* Return type */
+            MLSamplerEMUSString,      /* Parent class */
+            isProduct,          /* Name of function in C++ (must match Python name) */
+            config
+            );
+        };
+        
+        virtual bool isReactant(const torch::Tensor& config) override
+        {
+        PYBIND11_OVERRIDE_PURE(
+            bool, /* Return type */
+            MLSamplerEMUSString,      /* Parent class */
+            isReactant,          /* Name of function in C++ (must match Python name) */
+            config
+            );
+        };
+        
+        torch::Tensor computeW(int index) override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                computeW,          /* Name of function in C++ (must match Python name) */
+                index
+                );
+            //Do nothing for now
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        torch::Tensor computeC() override
+        {
+            PYBIND11_OVERRIDE(
+                torch::Tensor, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                computeC          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        void computeFactors() 
+        {
+            PYBIND11_OVERRIDE(
+                void, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                computeFactors          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for nowi
+            //Might try and raise an error if this base method gets called instead
+        };
+        
+        virtual torch::Tensor getConfig() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                torch::Tensor, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                getConfig,          /* Name of function in C++ (must match Python name) */
+                );
+        };
+        
+        virtual void setConfig(const torch::Tensor& config) override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                setConfig,          /* Name of function in C++ (must match Python name) */
+                config
+                );
+        };
+
+        virtual void dumpConfig() override
+        {
+            PYBIND11_OVERRIDE_PURE(
+                void, /* Return type */
+                MLSamplerEMUSString,      /* Parent class */
+                dumpConfig,          /* Name of function in C++ (must match Python name) */
+                );
+            //Do nothing for now
+        };
+
+};
+
 void export_MLSamplerEXP(py::module& m)
 {
     //Expose everything to the Python side!
@@ -281,9 +541,66 @@ void export_MLSamplerFTS(py::module& m)
     ;
 };
 
+void export_MLSamplerEXPString(py::module& m)
+{
+    //Expose everything to the Python side!
+    py::class_<MLSamplerEXPString, PyMLSamplerEXPString, std::shared_ptr<MLSamplerEXPString> > (m, "MLSamplerEXPString", py::dynamic_attr())
+    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def("step", &MLSamplerEXPString::step)
+    .def("step_unbiased", &MLSamplerEXPString::step_unbiased)
+    .def("step_bc", &MLSamplerEXPString::step_bc)
+    .def("computeW", &MLSamplerEXPString::computeW)
+    .def("computeC", &MLSamplerEXPString::computeC)
+    .def("computeFactors", &MLSamplerEXPString::computeFactors)
+    .def("checkFTSCell", &MLSamplerEXPString::checkFTSCell)
+    .def("normalizeRejectionCounts", &MLSamplerEXPString::normalizeRejectionCounts)
+    .def("isProduct", &MLSamplerEXPString::isProduct)
+    .def("isReactant", &MLSamplerEXPString::isReactant)
+    .def("getConfig", &MLSamplerEXPString::getConfig)
+    .def("setConfig", &MLSamplerEXPString::setConfig)
+    .def("dumpConfig", &MLSamplerEXPString::dumpConfig)
+    .def_readwrite("torch_config", &MLSamplerEXPString::torch_config)
+    .def_readwrite("fwd_weightfactor", &MLSamplerEXPString::fwd_weightfactor)
+    .def_readwrite("rejection_count", &MLSamplerEXPString::rejection_count)
+    .def_readwrite("steps", &MLSamplerEXPString::steps)
+    .def_readwrite("bwrd_weightfactor", &MLSamplerEXPString::bwrd_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &MLSamplerEXPString::reciprocal_normconstant)
+    .def_readwrite("distance_sq_list", &MLSamplerEXPString::distance_sq_list)
+    .def_readwrite("invkT", &MLSamplerEXPString::invkT)
+    .def_readwrite("kappa", &MLSamplerEXPString::kappa)
+    ;
+};
+
+void export_MLSamplerEMUSString(py::module& m)
+{
+    //Expose everything to the Python side!
+    py::class_<MLSamplerEMUSString, PyMLSamplerEMUSString, std::shared_ptr<MLSamplerEMUSString> > (m, "MLSamplerEMUSString", py::dynamic_attr())
+    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def("step", &MLSamplerEMUSString::step)
+    .def("step_unbiased", &MLSamplerEMUSString::step_unbiased)
+    .def("step_bc", &MLSamplerEMUSString::step_bc)
+    .def("computeW", &MLSamplerEMUSString::computeW)
+    .def("computeC", &MLSamplerEMUSString::computeC)
+    .def("computeFactors", &MLSamplerEMUSString::computeFactors)
+    .def("isProduct", &MLSamplerEMUSString::isProduct)
+    .def("isReactant", &MLSamplerEMUSString::isReactant)
+    .def("getConfig", &MLSamplerEMUSString::getConfig)
+    .def("setConfig", &MLSamplerEMUSString::setConfig)
+    .def("dumpConfig", &MLSamplerEMUSString::dumpConfig)
+    .def_readwrite("torch_config", &MLSamplerEMUSString::torch_config)
+    .def_readwrite("overlapprob_row", &MLSamplerEMUSString::overlapprob_row)//fwd_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &MLSamplerEMUSString::reciprocal_normconstant)
+    .def_readwrite("distance_sq_list", &MLSamplerEMUSString::distance_sq_list)
+    .def_readwrite("invkT", &MLSamplerEMUSString::invkT)
+    .def_readwrite("kappa", &MLSamplerEMUSString::kappa)
+    ;
+};
+
 
 PYBIND11_MODULE(/*name of module*/ _ml, /*variable name*/ m)
 {
     export_MLSamplerEXP(m);
+    export_MLSamplerEXPString(m);
+    export_MLSamplerEMUSString(m);
     export_MLSamplerFTS(m);
 }

@@ -258,7 +258,7 @@ class FTSImplicitUpdate(Optimizer):
 
             for p in group['params']:
                 if p.requires_grad is True:
-                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
+                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
                 ## (1) Compute the average configuration
                 avgconfig = torch.zeros_like(p)
@@ -333,7 +333,6 @@ class FTSUpdate(Optimizer):
     @torch.no_grad()
     def step(self, configs, batch_size):
         """Performs a single optimization step.
-
         """
 
         for group in self.param_groups:
@@ -344,7 +343,8 @@ class FTSUpdate(Optimizer):
 
             for p in group['params']:
                 if p.requires_grad is True:
-                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
+                    #print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
+                    print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
                 ## (1) Compute the average configuration
                 avgconfig = torch.zeros_like(p)
