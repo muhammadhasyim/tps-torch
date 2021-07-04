@@ -45,7 +45,30 @@ class FTSLayer(nn.Module):
     def forward(self, x):
         return torch.sum((self.string-x)**2,dim=1)
 
-class FTSLayerUS(FTSLayer):
+class FTSLayerUS(nn.Module):
+    r""" A linear layer, where the paramaters correspond to the string obtained by the 
+        general FTS method. 
+        
+        Args:
+            react_config (torch.Tensor): starting configuration in the reactant basin. 
+            
+            prod_config (torch.Tensor): starting configuration in the product basin. 
+
+    """
+    def __init__(self, react_config, prod_config, num_nodes):
+        super().__init__()
+            
+        #Declare my string as NN paramaters and disable gradient computations
+        string = torch.vstack([(1-s)*react_config+s*prod_config for s in np.linspace(0, 1, num_nodes)])
+        self.string = nn.Parameter(string) 
+        self.string.requires_grad = False 
+    def compute_metric(self, x):
+        return torch.sum((self.string-x)**2,dim=1)
+    
+    def forward(self, x):
+        return torch.sum((self.string[_rank]-x)**2)#torch.sum((self.string-x)**2,dim=1)
+
+class FTSLayerUSAsym(FTSLayer):
     r""" A linear layer, where the paramaters correspond to the string obtained by the 
         general FTS method. 
         
@@ -56,21 +79,17 @@ class FTSLayerUS(FTSLayer):
 
     """
     def __init__(self, react_config, prod_config, num_nodes,kappa_perpend,kappa_parallel):
-        super(FTSLayerUS,self).__init__(react_config, prod_config, num_nodes)
+        super(FTSLayerUSAsym,self).__init__(react_config, prod_config, num_nodes)
         self.kappa_perpend = kappa_perpend
         self.kappa_parallel = kappa_parallel
     def compute_metric(self, x):
         with torch.no_grad():
             dist_sq = torch.sum((self.string-x)**2,dim=1)
-            tangent = torch.zeros(_world_size)#dist_sq)#self.string)
+            tangent = torch.zeros(_world_size)
             ds = torch.norm(self.string[1]-self.string[0])#**2)**0.5
-            for i in range(_world_size):
-                if  i == 0:
-                    tangent[i] = torch.dot( (self.string[i+1]-self.string[i])/ds,x-self.string[i])
-                if  i == _world_size-1:
-                    tangent[i] = torch.dot( (self.string[i]-self.string[i-1])/ds, x-self.string[i])
-                else:
-                    tangent[i] = torch.dot( 0.5*(self.string[i+1]-self.string[i-1])/ds, x-self.string[i])
+            tangent[0] = torch.dot( (self.string[1]-self.string[0])/ds,x-self.string[-1])
+            tangent[-1] = torch.dot( (self.string[-1]-self.string[-2])/ds, x-self.string[-1])
+            tangent[1:-1] = torch.sum(0.5*((self.string[2:]-self.string[:-2])/ds)*(x-self.string[1:-1]),dim=1)
             return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
     def forward(self, x):
         with torch.no_grad():
