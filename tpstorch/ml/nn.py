@@ -72,6 +72,7 @@ class FTSLayerUS(FTSLayer):
                 else:
                     tangent[i] = torch.dot( 0.5*(self.string[i+1]-self.string[i-1])/ds, x-self.string[i])
             return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
+    """
     def forward(self, x):
         with torch.no_grad():
             dist_sq = torch.sum((self.string[_rank]-x)**2)#,dim=1)
@@ -84,6 +85,7 @@ class FTSLayerUS(FTSLayer):
             else:
                 tangent = torch.dot( 0.5*(self.string[_rank+1]-self.string[_rank-1])/ds, x-self.string[_rank])
             return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
+    """
 class FTSCommittorLoss(_Loss):
     r"""Loss function which implements the MSE loss for the committor function. 
         
@@ -280,77 +282,6 @@ class FTSCommittorLoss(_Loss):
     def forward(self, counter, strings):
         self.fts_loss = self.compute_fts(counter, strings)
         return self.fts_loss
-
-class EnergyLoss(_Loss):
-    r"""Loss function which implements the MSE loss for the committor function. 
-        
-        This loss function automatically collects the committor values through brute-force simulation.
-
-        Args:
-    """
-    def __init__(self, committor, lambda_cl=1.0, cl_start=200, cl_end=2000000, cl_rate=100, cl_trials=50, batch_size_cl=0.5):
-        super(CommittorLoss, self).__init__()
-        
-        self.cl_loss = torch.zeros(1)
-        self.committor = committor 
-
-        self.cl_start = cl_start
-        self.cl_end = cl_end
-        self.lambda_cl = lambda_cl
-        self.cl_rate = cl_rate
-        self.cl_trials = cl_trials
-        self.batch_size_cl = batch_size_cl
-        
-        self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[0], dtype=torch.float) 
-        self.cl_configs_values = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), dtype=torch.float)
-        self.cl_configs_count = 0
-    
-    def compute_cl(self,counter, config, energy):
-        """Computes the committor loss function 
-            TO DO: Complete this docstrings 
-        """
-        #Initialize loss to zero
-        loss_cl = torch.zeros(1)
-        
-        if ( counter < self.cl_start):
-            #Not the time yet to compute the committor loss
-            return loss_cl
-        elif (counter==self.cl_start):
-            
-            #Generate the first committor sample
-            #Save the committor values and initial configuration 
-            self.cl_configs_values[0] = energy
-            self.cl_configs[0] = config.detach().clone()
-            self.cl_configs_count += 1
-            
-            # Now compute losis
-            committor_penalty = torch.mean((self.committor.get_energy(self.cl_configs[0])-self.cl_configs_values[0])**2)
-            loss_cl += 0.5*self.lambda_cl*committor_penalty
-            #Collect all the results
-            dist.all_reduce(loss_cl)
-            return loss_cl/_world_size
-        else:
-            if counter % self.cl_rate==0 and counter < self.cl_end:
-                # Generate new committor configs and keep on generating the loss
-                configs_count = self.cl_configs_count
-                self.cl_configs_values[configs_count] = energy
-                self.cl_configs[configs_count] = config.detach().clone()
-                self.cl_configs_count += 1
-            
-            # Compute loss by sub-sampling however many batches we have at the moment
-            indices_committor = torch.randperm(self.cl_configs_count)[:int(self.batch_size_cl*self.cl_configs_count)]
-            if self.cl_configs_count == 1:
-                indices_committor = 0
-            committor_penalty = torch.mean((self.committor.get_energy(self.cl_configs[indices_committor])-self.cl_configs_values[indices_committor])**2)
-            loss_cl += 0.5*self.lambda_cl*committor_penalty
-            
-            #Collect all the results
-            dist.all_reduce(loss_cl)
-            return loss_cl/_world_size
-    
-    def forward(self, counter, config, energy):
-        self.cl_loss = self.compute_cl(counter, config)
-        return self.cl_loss
 
 
 class CommittorLoss(_Loss):
@@ -1131,5 +1062,138 @@ class BKELossFTS(_BKELoss):
 
     def forward(self, gradients, rejection_counts):
         self.main_loss = self.compute_bkeloss(gradients, rejection_counts)
+        self.bc_loss = self.compute_bc()
+        return self.main_loss+self.bc_loss
+
+class BKELossFTS2(_BKELoss):
+    r"""Loss function corresponding to the variational form of the Backward 
+        Kolmogorov Equation, which includes reweighting by exponential (EXP)
+        averaging. 
+
+    Args:
+        bc_sampler (tpstorch.MLSamplerEXP): the MD/MC sampler used for obtaining
+        configurations in product and reactant basin.  
+        
+        committor (tpstorch.nn.Module): the committor function, represented 
+        as a neural network. 
+        
+        lambda_A (float): penalty strength for enforcing boundary conditions at 
+            the reactant basin. 
+        
+        lambda_B (float): penalty strength for enforcing boundary 
+        conditions at the product basin. If None is given, lambda_B=lambda_A
+        
+        start_react (torch.Tensor): starting configuration to sample reactant 
+        basin. 
+        
+        start_prod (torch.Tensor): starting configuration to sample product 
+        basin
+       
+        n_bc_samples (int, optional): total number of samples to collect at both
+        product and reactant basin. 
+
+        bc_period (int, optional): the number of timesteps to collect one 
+        configuration during sampling at either product and reactant basin.
+
+        batch_size_bc (float, optional): size of mini-batch for the boundary 
+        condition loss during gradient descent, expressed as fraction of 
+        n_bc_samples.
+    """
+
+    def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=5e-9, mode='noshift'):
+        super(BKELossFTS2, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                                        start_prod, n_bc_samples, bc_period, batch_size_bc)
+        self.tol = tol
+        self.mode = mode
+        if mode != 'noshift' and mode != 'shift':
+            raise RuntimeError("The only available modes are 'shift' or 'noshift'!")
+    
+    @torch.no_grad()
+    def computeZl(self,rejection_counts):
+        """ Computes the reweighting factor z_l by solving an eigenvalue problem
+            
+            Args:
+                rejection_counts (torch.Tensor): an array of rejection counts, i.e., how many times
+                a system steps out of its cell in the FTS smulation, stored by an MPI process. 
+            
+            Formula and maths is based on our paper. 
+        """
+        
+        #Set the row according to rank
+        Kmatrix = torch.zeros(_world_size,_world_size)
+        Kmatrix[_rank] = rejection_counts
+        
+	#Add tolerance values to the off-diagonal elements
+        if self.mode == 'shift':
+            if _rank == 0:
+                Kmatrix[_rank+1] = self.tol
+            elif _rank == _world_size-1:
+                Kmatrix[_rank-1] = self.tol
+            else:
+                Kmatrix[_rank-1] = self.tol
+                Kmatrix[_rank+1] = self.tol
+        
+	#All reduce to collect the results
+        dist.all_reduce(Kmatrix)
+        #Finallly, build the final matrix
+        Kmatrix = Kmatrix.t()-torch.diag(torch.sum(Kmatrix,dim=1)-self.tol)
+        #Compute the reweighting factors using an eigensolver
+        v, w = nullspace(Kmatrix.numpy(), atol=self.tol)
+        try:
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        except:
+            #Shift value may not be small enough so we choose a default higher tolerance detection
+            v, w = nullspace(Kmatrix.numpy(), atol=10**(-5), rtol=0)
+            index = np.argmin(w)
+            zl = np.real(v[:,index])
+        
+        #Normalize
+        zl = zl/np.sum(zl)  
+        return zl
+
+    def compute_bkeloss(self, gradients, rejection_counts, start_exact, zl_exact=None):
+        """Computes the loss corresponding to the varitional form of the BKE
+            including the FTS reweighting factors. 
+            
+            Independent computation is first done on individual MPI process. 
+            First, we compute the following at every 'l'-th MPI process: 
+
+            .. math::
+                L_l = \frac{1}{2 M_l} \sum_{x \in M_l} |\grad q(x)|^2,
+            
+            where :math: $M_l$ is the mini-batch collected by the l-th MPI
+            process. We then collect the computation to compute the main loss as
+
+            .. math::
+                \ell_{main} = \sum_{l=1}^{S-1} L_l z_l)
+            
+            where :math: 'S' is the MPI world size. 
+
+            Note that PyTorch does not track arithmetic operations during MPI
+            collective calls. Thus, the last sum containing L_l z_l is not reflected 
+            in the computational graph tracked by individual MPI process. The 
+            final gradients will be collected in each respective optimizer.
+        """
+        main_loss = torch.zeros(1) 
+        
+        #Compute the first part of the loss
+        main_loss =  0.5*torch.sum(torch.mean(gradients*gradients,dim=0))
+        
+        #Computing the reweighting factors, z_l in  our notation
+        self.zl = self.computeZl(rejection_counts)
+        
+        #renormalize main_loss
+        if start_exact == 0:
+            main_loss *= self.zl[_rank]
+            dist.all_reduce(main_loss)
+        else:
+            main_loss *= zl_exact[_rank]
+            dist.all_reduce(main_loss)
+        return main_loss
+
+    def forward(self, gradients, rejection_counts, start_exact, zl_exact=None):
+        self.main_loss = self.compute_bkeloss(gradients, rejection_counts, start_exact, zl_exact)
         self.bc_loss = self.compute_bc()
         return self.main_loss+self.bc_loss

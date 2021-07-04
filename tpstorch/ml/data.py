@@ -291,7 +291,6 @@ class EXPReweightStringSimulation:
                 self.sampler.save()        
                 
                 
-            self.sampler.computeMetric()
             #Compute the new set of reweighting factors from this new step 
             self.sampler.computeFactors()
             
