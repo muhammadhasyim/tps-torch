@@ -59,7 +59,7 @@ class FTSLayerUS(FTSLayer):
         super(FTSLayerUS,self).__init__(react_config, prod_config, num_nodes)
         self.kappa_perpend = kappa_perpend
         self.kappa_parallel = kappa_parallel
-    def compute_metric(self, x):
+    def forward(self, x):
         with torch.no_grad():
             dist_sq = torch.sum((self.string-x)**2,dim=1)
             tangent = torch.zeros(_world_size)#dist_sq)#self.string)
