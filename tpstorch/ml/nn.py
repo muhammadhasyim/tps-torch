@@ -59,7 +59,7 @@ class FTSLayerUS(FTSLayer):
         super(FTSLayerUS,self).__init__(react_config, prod_config, num_nodes)
         self.kappa_perpend = kappa_perpend
         self.kappa_parallel = kappa_parallel
-    def forward(self, x):
+    def compute_metric(self, x):
         with torch.no_grad():
             dist_sq = torch.sum((self.string-x)**2,dim=1)
             tangent = torch.zeros(_world_size)#dist_sq)#self.string)
@@ -71,6 +71,18 @@ class FTSLayerUS(FTSLayer):
                     tangent[i] = torch.dot( (self.string[i]-self.string[i-1])/ds, x-self.string[i])
                 else:
                     tangent[i] = torch.dot( 0.5*(self.string[i+1]-self.string[i-1])/ds, x-self.string[i])
+            return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
+    def forward(self, x):
+        with torch.no_grad():
+            dist_sq = torch.sum((self.string[_rank]-x)**2)#,dim=1)
+            tangent = torch.zeros_like(dist_sq)#_world_size)#dist_sq)#self.string)
+            ds = torch.norm(self.string[1]-self.string[0])#**2)**0.5
+            if  _rank == 0:
+                tangent = torch.dot( (self.string[_rank+1]-self.string[_rank])/ds,x-self.string[_rank])
+            if  _rank == _world_size-1:
+                tangent = torch.dot( (self.string[_rank]-self.string[_rank-1])/ds, x-self.string[_rank])
+            else:
+                tangent = torch.dot( 0.5*(self.string[_rank+1]-self.string[_rank-1])/ds, x-self.string[_rank])
             return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
 class FTSCommittorLoss(_Loss):
     r"""Loss function which implements the MSE loss for the committor function. 
