@@ -259,6 +259,8 @@ class EXPReweightStringSimulation:
         #Forward pass
         self.out = self.committor(self.sampler.torch_config)
         
+        self.sampler.computeMetric()    
+        
         #Compute the first set of reweighting factors from our initial condition
         self.sampler.computeFactors()#self.out)
         
