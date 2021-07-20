@@ -76,6 +76,12 @@ class FTSLayerUS(FTSLayer):
             dist_sq = torch.sum((self.string[_rank]-x)**2)#,dim=1)
             tangent_sq = torch.sum(self.tangent[_rank]*(x-self.string[_rank]))#,dim=1)
             return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent_sq**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
+    def set_tangent(self):
+        ds = torch.norm(self.string[1]-self.string[0])#**2)**0.5
+        self.tangent = torch.zeros_like(self.string)#dist_sq)#self.string)
+        self.tangent[0] = (self.string[1]-self.string[0])/ds
+        self.tangent[-1] = (self.string[-1]-self.string[-2])/ds
+        self.tangent[1:-1] = 0.5*(self.string[:-2]-self.string[2:])/ds
     """
     def forward(self, x):
         with torch.no_grad():
