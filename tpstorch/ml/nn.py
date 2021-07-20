@@ -253,7 +253,7 @@ class FTSCommittorLoss(_Loss):
             
             #Generate the first committor sample
             self.runSimulation(strings)
-            print("Rank [{}] finishes simulation for committor calculation".format(_rank))
+            print("Rank [{}] finishes simulation for committor calculation".format(_rank),flush=True)
             
             #Save the committor values and initial configuration 
             self.fts_configs_values[0] = self.compute_qalpha()
@@ -272,7 +272,7 @@ class FTSCommittorLoss(_Loss):
             if counter % self.fts_rate==0 and counter < self.fts_end:
                 # Generate new committor configs and keep on generating the loss
                 self.runSimulation(strings)
-                print("Rank [{}] finishes simulation for committor calculation".format(_rank))
+                print("Rank [{}] finishes simulation for committor calculation".format(_rank),flush=True)
                 configs_count = self.fts_configs_count
                 self.fts_configs_values[configs_count] = self.compute_qalpha()
                 self.fts_configs[configs_count] = strings[_rank].detach().clone()
@@ -367,7 +367,7 @@ class CommittorLoss(_Loss):
             
             #Generate the first committor sample
             counts = self.runTrials(initial_config)
-            print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+            print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5),flush=True)
             
             #Save the committor values and initial configuration 
             self.cl_configs_values[0] = np.mean(counts) 
@@ -384,7 +384,7 @@ class CommittorLoss(_Loss):
             if counter % self.cl_rate==0 and counter < self.cl_end:
                 # Generate new committor configs and keep on generating the loss
                 counts = self.runTrials(initial_config)
-                print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+                print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5),flush=True)
                 configs_count = self.cl_configs_count
                 self.cl_configs_values[configs_count] = np.mean(counts) 
                 self.cl_configs[configs_count] = initial_config.detach().clone()
@@ -478,7 +478,7 @@ class CommittorLoss2(_Loss):
             
             #Generate the first committor sample
             counts = self.runTrials(initial_config)
-            print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+            print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5),flush=True)
             
             #Save the committor values and initial configuration 
             self.cl_configs_values[0] = np.mean(counts) 
@@ -495,7 +495,7 @@ class CommittorLoss2(_Loss):
             if counter % self.cl_rate==0 and counter < self.cl_end:
                 # Generate new committor configs and keep on generating the loss
                 counts = self.runTrials(initial_config)
-                print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5))
+                print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5),flush=True)
                 configs_count = self.cl_configs_count
                 self.cl_configs_values[configs_count] = np.mean(counts) 
                 self.cl_configs[configs_count] = initial_config.detach().clone()
