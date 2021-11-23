@@ -110,10 +110,11 @@ void Dimer::BondForce(vector<float>& force_) {
     float distance = pow(bond_distance[0],2);
     distance += pow(bond_distance[1],2);
     distance += pow(bond_distance[2],2);
+    distance = sqrt(distance);
     float factor_0 = (distance-r_0-width)/width;
     float factor_1 = pow(factor_0,2);
     factor_1 = 1-factor_1;
-    float force_scalar = height*factor_0*factor_1/width;
+    float force_scalar = 4*height*factor_0*factor_1/width;
     force_[0] = bond_distance[0]/distance*force_scalar;
     force_[1] = bond_distance[1]/distance*force_scalar;
     force_[2] = bond_distance[2]/distance*force_scalar;
@@ -142,7 +143,7 @@ float Dimer::BondLength() {
     float distance = pow(bond_distance[0],2);
     distance += pow(bond_distance[1],2);
     distance += pow(bond_distance[2],2);
-    return pow(distance,0.5);
+    return sqrt(distance);
 }
 
 void Dimer::NormalNumber(float& rand_0, float& rand_1) {
@@ -173,7 +174,7 @@ void Dimer::BDStep() {
     // and the gamma and dt terms
     float factor_random = sqrt(2*temp*dt/(mass*gamma));
     for(int i=0; i<6; i++) {
-        random_num[6] *= factor_random;
+        random_num[i] *= factor_random;
     }
 
     // Get bond force
