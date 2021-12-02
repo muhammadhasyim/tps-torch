@@ -204,7 +204,7 @@ class FTSImplicitUpdate(Optimizer):
     
     """
 
-    def __init__(self, params, sampler=required, deltatau=required, dimN=required, kappa = 0.1, freeze=False):
+    def __init__(self, params, sampler=required, deltatau=required, dimN=required, kappa = 0.1, freeze=False, periodic=False,dim = 3):
         if deltatau is not required and deltatau < 0.0:
             raise ValueError("Invalid step size: {}".format(deltatau))
 
@@ -212,6 +212,8 @@ class FTSImplicitUpdate(Optimizer):
         super(FTSImplicitUpdate, self).__init__(params, defaults)
         self.avgconfig = 0
         self.nsamples = 0.0
+        self.periodic = periodic
+        self.dim = dim
         
         # Matrix used for inversing
         # Construct only on rank 0
@@ -247,7 +249,7 @@ class FTSImplicitUpdate(Optimizer):
         super(FTSImplicitUpdate, self).__setstate__(state)
 
     @torch.no_grad()
-    def step(self, configs, batch_size):
+    def step(self, configs, batch_size,boxsize):#,remove_nullspace):
         """Performs a single optimization step.
 
         """
@@ -267,6 +269,9 @@ class FTSImplicitUpdate(Optimizer):
                 
                 ## (1) Implicit Stochastic Gradient Descent
                 force = p.clone()+group['lr']*(avgconfig)#[1:-1]
+                #if self.periodic == True:
+                #    force = remove_nullspace(force,avgconfig)
+                
                 #if _rank == 0:
                 #    print(p)
                 p.zero_()
@@ -283,6 +288,9 @@ class FTSImplicitUpdate(Optimizer):
                 intm_alpha = torch.zeros_like(alpha)
                 for i in range(1, p.shape[0]):
                     intm_alpha[i] += ell_k[i-1]+intm_alpha[i-1]
+                #If we need to account for periodic boundary conditions
+                if self.periodic == True:
+                    p.add_(-boxsize*torch.round(p/boxsize))
                 
                 #REALLY REALLY IMPORTANT. this interpolation assumes that the intermediate configuration lies between the left and right neighbors 
                 #of the desired  configuration,
@@ -315,7 +323,7 @@ class FTSUpdate(Optimizer):
     
     """
 
-    def __init__(self, params, sampler=required, deltatau=required, momentum=0, nesterov=False, kappa = 0.1, freeze=False):
+    def __init__(self, params, sampler=required, deltatau=required, momentum=0, nesterov=False, kappa = 0.1, freeze=False,periodic=False,dim=3):
         if deltatau is not required and deltatau < 0.0:
             raise ValueError("Invalid step size: {}".format(deltatau))
         if momentum < 0.0:
@@ -325,13 +333,15 @@ class FTSUpdate(Optimizer):
         super(FTSUpdate, self).__init__(params, defaults)
         self.avgconfig = 0
         self.nsamples = 0.0
+        self.periodic = periodic
+        self.dim = dim
     def __setstate__(self, state):
         super(FTSUpdate, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, configs, batch_size):
+    def step(self, configs, batch_size,boxsize,remove_nullspace):
         """Performs a single optimization step.
         """
 
@@ -346,18 +356,25 @@ class FTSUpdate(Optimizer):
                     #print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
                     print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
-                ## (1) Compute the average configuration
+                ## (1.a) Compute the average configuration
                 avgconfig = torch.zeros_like(p)
                 avgconfig[_rank] = torch.mean(configs,dim=0)
+                ## (1.b) Compute the rotated and translated average configuration
+                if self.periodic == True:
+                    avgconfig[_rank] = remove_nullspace(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
                 dist.all_reduce(avgconfig)
                 
-                ## (1) Stochastic Gradient Descent
+                #dist.all_reduce(projected_p)
+                
+                ## (2) Stochastic Gradient Descent
                 d_p = torch.zeros_like(p)
                 
+                #Add the gradient of cost function
                 d_p[1:-1] = (p[1:-1]-avgconfig[1:-1])-kappa*_world_size*(p[0:-2]-2*p[1:-1]+p[2:])
                 if freeze is False:
                     d_p[0] = (p[0]-avgconfig[0])
                     d_p[-1] = (p[-1]-avgconfig[-1])
+                #Add in the Laplacian term
                 
                 if momentum != 0:
                     param_state = self.state[p]
@@ -370,10 +387,13 @@ class FTSUpdate(Optimizer):
                         d_p = d_p.add(buf, alpha=momentum)
                     else:
                         d_p = buf
-
-                p.add_(d_p, alpha=-group['lr'])
                 
-                ## (2) Re-parameterization/Projection
+                p.add_(d_p, alpha=-group['lr'])
+                #If we need to account for periodic boundary conditions
+                if self.periodic == True:
+                    p.add_(-boxsize*torch.round(p/boxsize))
+                
+                ## (3) Re-parameterization/Projection
                 #Compute the new intermediate nodal variables
                 #which doesn't obey equal arc-length parametrization
                 

@@ -95,10 +95,10 @@ class FTSSimulation:
                     raise ValueError("Committor value is NaN!")
                 else:
                     #Compute all for all storage entries
-                    configs[i,:] = self.sampler.torch_config
+                    configs[i,:] = self.sampler.torch_config.flatten()
                     grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
             else:
-                    configs[i,:] = self.sampler.torch_config
+                    configs[i,:] = self.sampler.torch_config.flatten()
 
         with torch.no_grad(): 
             if self.mode == 'adaptive' and self.min_count != 0: 
@@ -224,7 +224,7 @@ class EMUSReweightStringSimulation:
             else:
                 
                 #Compute all for all storage entries
-                configs[i,:] = self.sampler.torch_config
+                configs[i,:] = self.sampler.torch_config.flatten()
                 grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
                 reciprocal_normconstant[i] = self.sampler.reciprocal_normconstant
                 overlapprob_row[i,:] = self.sampler.overlapprob_row

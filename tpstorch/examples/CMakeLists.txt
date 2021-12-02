@@ -6,3 +6,4 @@ foreach(file ${files})
 endforeach()
 
 add_subdirectory(mullerbrown_ml)
+add_subdirectory(dimer_ml)

@@ -19,6 +19,7 @@ class Dimer {
         Dimer();
         // Default destructor
         ~Dimer();
+        void UpdateStates(int);
         // Input parameters
         void GetParams(string, int);
         // Input parameters when not using an input file
@@ -93,11 +94,13 @@ class Dimer {
         int storage_time = 1;
         int frame_time = 10;
         int check_time = 1000;
+        int rank_in_ = 1;
         vector<float> phi_storage;
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
         string config = "config.xyz";
         ofstream config_file;
+        ofstream log_file;
 
 };
 

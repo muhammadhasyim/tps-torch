@@ -21,13 +21,13 @@ Dimer::~Dimer() {
 }
 
 void Dimer::GetParams(string name, int rank_in) {
+    rank_in_ = rank_in;
     ifstream input;
     input.open(name);
     if(input.fail()) {
         cout << "No input file" << endl;
     }
     else {
-        char buffer;
         string line;
         //cout << "Param file detected. Changing values." << endl;
         input >> line >> temp;
@@ -78,6 +78,7 @@ void Dimer::GetParams(string name, int rank_in) {
     }
     // also modify config path
     config_file.open("string_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
+    log_file.open("log_"+to_string(rank_in)+"_config.txt", std::ios_base::app);
 }
 
 void Dimer::Energy(float& ener_) {
@@ -163,6 +164,7 @@ void Dimer::NormalNumber(float& rand_0, float& rand_1) {
 }
 
 void Dimer::BDStep() {
+    generator = Saru(seed_base, count_step++);
     // Perform Brownian Dynamics step
     // Initialize random numbers
     vector<float> random_num(6,0.0);
@@ -217,7 +219,6 @@ void Dimer::Simulate(int steps) {
     config_file_2.open(config, std::ios_base::app);
     Energy(phi);
     for(int i=0; i<steps; i++) {
-        generator = Saru(seed_base, count_step++);
         BDStep();
         if(i%check_time==0) {
             Energy(phi);
@@ -237,12 +238,38 @@ void Dimer::Simulate(int steps) {
 
 }
 
+
+void Dimer::UpdateStates(int i) {
+    /*if(i%check_time==0) {
+        Energy(phi);
+        //cout << "Cycle " << i << " phi " << phi << endl;
+    }
+    if(i%storage_time==0) {
+        Energy(phi);
+
+        phi_storage[i/storage_time] = phi;
+        bond_storage[i/storage_time] = bond_len;
+        state_storage[i/storage_time]= state;
+    }
+    */
+    Energy(phi);
+    float bond_len = BondLength();
+    // turns off synchronization of C++ streams
+    ios_base::sync_with_stdio(false);
+    // Turns off flushing of out before in
+    cin.tie(NULL);
+    log_file << std::scientific << phi << " " << std::scientific << bond_len << "\n";
+    
+    DumpXYZBias(0);
+}
+
+
 void Dimer::DumpXYZ(ofstream& myfile) {
     // turns off synchronization of C++ streams
     ios_base::sync_with_stdio(false);
     // Turns off flushing of out before in
     cin.tie(NULL);
-    myfile << 6 << endl;
+    myfile << 2 << endl;
     myfile << "# step " << count_step << endl;
     for(int i=0; i<2; i++) {
         myfile << "1 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
@@ -254,7 +281,7 @@ void Dimer::DumpXYZBias(int val=0) {
     ios_base::sync_with_stdio(false);
     // Turns off flushing of out before in
     cin.tie(NULL);
-    config_file << 6 << endl;
+    config_file << 2 << endl;
     config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
     config_file << "\n";
     for(int i=0; i<2; i++) {
@@ -281,12 +308,12 @@ void Dimer::DumpPhi() {
 
     ofstream myfile;
     myfile.precision(10);
-    myfile.open("phi.txt");
+    myfile.open("phi_"+to_string(rank_in_)+".txt");
     myfile << "phi from simulation run" << endl;
     myfile << "Average " << std::scientific << phi_ave << " Standard_Deviation " << std::scientific << phi_std << endl;
     myfile.close();
 
-    myfile.open("phi_storage.txt");
+    myfile.open("phi_storage_"+to_string(rank_in_)+".txt");
     myfile << "Energy from run" << endl;
     for(int i=0; i<storage; i++) {
         myfile << std::scientific << phi_storage[i] << "\n";
@@ -312,13 +339,13 @@ void Dimer::DumpBond() {
 
     ofstream myfile;
     myfile.precision(10);
-    myfile.open("bond.txt");
+    myfile.open("bond_"+to_string(rank_in_)+".txt");
     myfile << "bond from simulation run" << endl;
     myfile << "Average " << std::scientific << bond_ave << " Standard_Deviation " << std::scientific << bond_std << endl;
     myfile.close();
 
-    myfile.open("bond_storage.txt");
-    myfile << "Energy from run" << endl;
+    myfile.open("bond_storage_"+to_string(rank_in_)+".txt");
+    myfile << "Bond from run" << endl;
     for(int i=0; i<storage; i++) {
         myfile << std::scientific << bond_storage[i] << "\n";
     }
@@ -328,7 +355,7 @@ void Dimer::DumpStates() {
     int storage = cycles/storage_time;
     ofstream myfile;
     myfile.precision(10);
-    myfile.open("state_storage.txt");
+    myfile.open("state_storage_"+to_string(rank_in_)+".txt");
     myfile << "States from run" << endl;
     for(int i=0; i<storage; i++) {
         myfile << std::scientific << state_storage[i][0][0] << " " << std::scientific << state_storage[i][0][1] << " " << std::scientific << state_storage[i][0][2] << "\n";

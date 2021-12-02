@@ -5,7 +5,7 @@
 #include <torch/torch.h>
 #include <pybind11/pybind11.h>
 #include <c10d/ProcessGroupMPI.hpp>
-
+namespace py = pybind11;
 class MLSamplerFTS
 {
     public:
