@@ -280,7 +280,7 @@ void Dimer::DumpXYZ(ofstream& myfile) {
     myfile << 2 << endl;
     myfile << "# step " << count_step << endl;
     for(int i=0; i<2; i++) {
-        myfile << "1 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
+        myfile << "1 " << std::scientific << 0.5*r_0 << " " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
     }
 }
 
@@ -293,7 +293,7 @@ void Dimer::DumpXYZBias(int val=0) {
     config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
     config_file << "\n";
     for(int i=0; i<2; i++) {
-        config_file << "1 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
+        config_file << "1 " << std::scientific << 0.5*r_0 << " " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
     }
 }
 
