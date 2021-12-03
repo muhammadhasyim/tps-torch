@@ -248,25 +248,13 @@ void Dimer::Simulate(int steps) {
 
 
 void Dimer::UpdateStates(int i) {
-    /*if(i%check_time==0) {
-        Energy(phi);
-        //cout << "Cycle " << i << " phi " << phi << endl;
-    }
-    if(i%storage_time==0) {
-        Energy(phi);
-
-        phi_storage[i/storage_time] = phi;
-        bond_storage[i/storage_time] = bond_len;
-        state_storage[i/storage_time]= state;
-    }
-    */
     Energy(phi);
     float bond_len = BondLength();
     // turns off synchronization of C++ streams
     ios_base::sync_with_stdio(false);
     // Turns off flushing of out before in
     cin.tie(NULL);
-    log_file << std::scientific << phi << " " << std::scientific << bond_len << "\n";
+    log_file << std::scientific << phi << " " << std::scientific << bond_len << endl;
     
     DumpXYZBias(0);
 }

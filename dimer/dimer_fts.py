@@ -175,5 +175,5 @@ class DimerFTS(MyMLFTSSampler):
 
     def save(self):
         self.timestep += 1
-        if self.save_config:
+        if self.save_config and self.timestep % 100 == 0:
             self.dumpConfig(self.timestep)

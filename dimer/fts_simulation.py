@@ -70,13 +70,13 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 
 #Reactant
-dist_init = r0-0.25*r0
+dist_init = r0-0.95*r0
 start = torch.zeros((2,3))
 start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width+0.25*r0
+dist_init = r0+2*width+0.95*r0
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
@@ -90,7 +90,7 @@ dimer_sim_fts = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).de
 
 #Construct FTSSimulation
 #ftsoptimizer = FTSImplicitUpdate(ftslayer.parameters(), dimN = 6, deltatau=0.005,kappa=0.2,periodic=True,dim=3)
-ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.05,momentum=0.95,kappa=0.1,periodic=True,dim=3)
+ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.9,kappa=0.2,periodic=True,dim=3)
 batch_size = 10
 period = 10
 datarunner_fts = FTSSimulation(dimer_sim_fts, nn_training = False, period=period, batch_size=batch_size, dimN=6)
@@ -108,6 +108,7 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
         f.write("1 {} {} {} {} \n".format(0.5*r0,string_temp[0,0],string_temp[0,1], string_temp[0,2]))##String config number "+rank+"\n")
         f.write("1 {} {} {} {} \n".format(0.5*r0,string_temp[1,0],string_temp[1,1], string_temp[1,2]))##String config number "+rank+"\n")
         f.flush()
-        g.write("{} {}".format((i+1)*period,torch.norm(string_temp[0]-string_temp[1])))
+        g.write("{} {} \n".format((i+1)*period,torch.norm(string_temp[0]-string_temp[1])))
+        g.flush()
         if rank == 0:
             torch.save(ftslayer.state_dict(), "final_{}".format(i))
