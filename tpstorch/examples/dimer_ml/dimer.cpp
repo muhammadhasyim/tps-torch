@@ -64,6 +64,14 @@ void Dimer::GetParams(string name, int rank_in) {
         //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
         getline(input, line);
 
+        input >> line >> config_filename;
+        //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
+        getline(input, line);
+
+        input >> line >> log_filename;
+        //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
+        getline(input, line);
+        
         // Initialize system
         // Initialize particles such that they have distance of dist_init
         // Do so using just the z-direction
@@ -77,8 +85,8 @@ void Dimer::GetParams(string name, int rank_in) {
         generator = Saru(seed_base, count_step);
     }
     // also modify config path
-    config_file.open("string_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
-    log_file.open("log_"+to_string(rank_in)+"_config.txt", std::ios_base::app);
+    config_file.open(config_filename+"_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
+    log_file.open(log_filename+"_"+to_string(rank_in)+"_log.txt", std::ios_base::app);
 }
 
 void Dimer::Energy(float& ener_) {
@@ -216,7 +224,7 @@ void Dimer::Simulate(int steps) {
     // Run simulation
     ofstream config_file_2;
     config_file_2.precision(10);
-    config_file_2.open(config, std::ios_base::app);
+    config_file_2.open(config_filename, std::ios_base::app);
     Energy(phi);
     for(int i=0; i<steps; i++) {
         BDStep();
