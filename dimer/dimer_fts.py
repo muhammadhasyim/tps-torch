@@ -32,63 +32,76 @@ class FTSLayerCustom(FTSLayer):
 
     @torch.no_grad()
     def compute_metric(self,x):
-        #Remove center of mass 
-        x = x.view(2,3)
-        x_com = 0.5*(x[0]+x[1])
-        x[0] -= x_com
-        x[1] -= x_com
+        ##(1) Remove center of mass 
+        old_x = x.view(2,3).clone()
+
+        #Compute the pair distance
+        dx = (old_x[0]-old_x[1])
+        dx = dx-torch.round(dx/self.boxsize)*self.boxsize
+        
+        #Re-compute one of the coordinates and shift to origin
+        old_x[0] = dx+old_x[1] 
+        x_com = 0.5*(old_x[0]+old_x[1])
+        old_x[0] -= x_com
+        old_x[1] -= x_com
         
         new_string = self.string.view(_world_size,2,3).clone()
-        s_com = (0.5*(new_string[:,0]+new_string[:,1])).detach().clone()#,dim=1)
+        
+        #Compute the pair distance
+        ds = (new_string[:,0]-new_string[:,1])
+        ds = ds-torch.round(ds/self.boxsize)*self.boxsize
+        
+        #Re-compute one of the coordinates and shift to origin
+        new_string[:,0] = ds+new_string[:,1]
+        s_com = 0.5*(new_string[:,0]+new_string[:,1])#.detach().clone()#,dim=1)
         new_string[:,0] -= s_com
         new_string[:,1] -= s_com
         
-        #Rotate the configuration
-        dx = (x[0]-x[1])
-        dx = dx-torch.round(dx/self.boxsize)*self.boxsize
+        ##(2) Rotate the configuration
         dx /= torch.norm(dx)
-        
-        ds = (new_string[:,0]-new_string[:,1])
-        ds = ds-torch.round(ds/self.boxsize)*self.boxsize
         new_x = torch.zeros_like(new_string)    
         for i in range(_world_size): 
             ds[i] /= torch.norm(ds[i])
             v = torch.cross(dx,ds[i])
             cosine = torch.dot(ds[i],dx)
-            new_x[i,0] = x[0] +torch.cross(v,x[0])+torch.cross(v,torch.cross(v,x[0]))/(1+cosine)
-            new_x[i,0] -= torch.round(new_x[i,0]/self.boxsize)*self.boxsize
-            new_x[i,1] = x[1] +torch.cross(v,x[1])+torch.cross(v,torch.cross(v,x[1]))/(1+cosine)
-            new_x[i,1] -= torch.round(new_x[i,1]/self.boxsize)*self.boxsize
+            new_x[i,0] = old_x[0] +torch.cross(v,old_x[0])+torch.cross(v,torch.cross(v,old_x[0]))/(1+cosine)
+            new_x[i,1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
         return torch.sum((new_string.view(_world_size,6)-new_x.view(_world_size,6))**2,dim=1)
     
     def forward(self,x):
-        #Remove center of mass 
-        x = x.view(2,3)
-        x_com = 0.5*(x[0]+x[1])
-        x[0] -= x_com
-        x[1] -= x_com
+        ##(1) Remove center of mass 
+        new_x = x.view(2,3).clone()
+
+        #Compute the pair distance
+        dx = (new_x[0]-new_x[1])
+        dx = dx-torch.round(dx/self.boxsize)*self.boxsize
+        
+        #Re-compute one of the coordinates and shift to origin
+        new_x[0] = dx+new_x[1] 
+        x_com = 0.5*(new_x[0]+new_x[1])
+        new_x[0] -= x_com
+        new_x[1] -= x_com
         
         new_string = self.string[_rank].view(2,3).clone()
-        s_com = (0.5*(new_string[0]+new_string[1])).detach().clone()#,dim=1)
+        
+        #Compute the pair distance
+        ds = (new_string[0]-new_string[1])
+        ds = ds-torch.round(ds/self.boxsize)*self.boxsize
+        
+        #Re-compute one of the coordinates and shift to origin
+        new_string[0] = ds+new_string[1]
+        s_com = 0.5*(new_string[0]+new_string[1])#.detach().clone()#,dim=1)
         new_string[0] -= s_com
         new_string[1] -= s_com
         
-        #Rotate the configuration
-        dx = (x[0]-x[1])
-        dx = dx-torch.round(dx/self.boxsize)*self.boxsize
-        dx /= torch.norm(x[0]-x[1])
-        
-        ds = (new_string[0]-new_string[1])
-        ds = ds-torch.round(ds/self.boxsize)*self.boxsize
-        ds /= torch.norm(new_string[0]-new_string[1])
-        
+        ##(2) Rotate the configuration
+        dx /= torch.norm(dx)
+        ds /= torch.norm(ds)
         new_x = torch.zeros_like(x)    
         v = torch.cross(dx,ds)
         cosine = torch.dot(ds,dx)
-        new_x[0] = x[0] +torch.cross(v,x[0])+torch.cross(v,torch.cross(v,x[0]))/(1+cosine)
-        new_x[0] = new_x[0]-torch.round(new_x[0]/self.boxsize)*self.boxsize
-        new_x[1] = x[1] +torch.cross(v,x[1])+torch.cross(v,torch.cross(v,x[1]))/(1+cosine)
-        new_x[1] = new_x[1]-torch.round(new_x[1]/self.boxsize)*self.boxsize
+        new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
+        new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         return torch.sum((new_string.view(_world_size,6)-new_x.flatten())**2)
 # This is a sketch of what it should be like, but basically have to also make committor play nicely
 # within function

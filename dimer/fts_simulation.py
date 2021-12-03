@@ -36,6 +36,44 @@ def initializer(s):
 
 @torch.no_grad()
 def dimer_nullspace(vec,x,boxsize):
+    ##(1) Remove center of mass 
+    old_x = x.view(2,3).clone()
+
+    #Compute the pair distance
+    dx = (old_x[0]-old_x[1])
+    dx = dx-torch.round(dx/boxsize)*boxsize
+    
+    #Re-compute one of the coordinates and shift to origin
+    old_x[0] = dx+old_x[1] 
+    x_com = 0.5*(old_x[0]+old_x[1])
+    old_x[0] -= x_com
+    old_x[1] -= x_com
+    
+    vec = vec.view(2,3).clone()
+    
+    #Compute the pair distance
+    ds = (vec[0]-vec[1])
+    ds = ds-torch.round(ds/boxsize)*boxsize
+    
+    #Re-compute one of the coordinates and shift to origin
+    vec[0] = ds+vec[1]
+    s_com = 0.5*(vec[0]+vec[1])#.detach().clone()#,dim=1)
+    vec[0] -= s_com
+    vec[1] -= s_com
+        
+    ##(2) Rotate the configuration
+    dx /= torch.norm(dx)
+    ds /= torch.norm(ds)
+    new_x = torch.zeros_like(old_x)    
+    v = torch.cross(dx,ds)
+    cosine = torch.dot(ds,dx)
+    new_x[0] = old_x[0] +torch.cross(v,old_x[0])+torch.cross(v,torch.cross(v,old_x[0]))/(1+cosine)
+    new_x[1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
+    return new_x.flatten()
+
+
+@torch.no_grad()
+def reset_orientation(vec,boxsize):
     #Remove center of mass 
     vec = vec.view(2,3).clone()
     s_com = (0.5*(vec[0]+vec[1])).detach().clone()#,dim=1)
@@ -47,23 +85,20 @@ def dimer_nullspace(vec,x,boxsize):
     ds /= torch.norm(ds)
     
     #We want to remove center of mass in x and string
-    x = x.view(2,3)
-    x_com = 0.5*(x[0]+x[1])
-    x[0] -= x_com
-    x[1] -= x_com
+    x = torch.zeros((2,3))
+    x[0,2] = -1.0
+    x[1,2] = 1.0
     dx = (x[0]-x[1])
-    dx = dx-torch.round(dx/boxsize)*boxsize
     dx /= torch.norm(x[0]-x[1])
         
     #Rotate the configuration
-    new_x = torch.zeros_like(x)    
-    v = torch.cross(dx,ds)
+    v = torch.cross(ds,dx)
     cosine = torch.dot(ds,dx)
-    new_x[0] = x[0] +torch.cross(v,x[0])+torch.cross(v,torch.cross(v,x[0]))/(1+cosine)
-    new_x[0] = new_x[0]-torch.round(new_x[0]/boxsize)*boxsize
-    new_x[1] = x[1] +torch.cross(v,x[1])+torch.cross(v,torch.cross(v,x[1]))/(1+cosine)
-    new_x[1] = new_x[1]-torch.round(new_x[1]/boxsize)*boxsize
-    return new_x.flatten()
+    vec[0] += torch.cross(v,vec[0])+torch.cross(v,torch.cross(v,vec[0]))/(1+cosine)
+    #vec[0] -= torch.round(vec[0]/boxsize)*boxsize
+    vec[1] += torch.cross(v,vec[1])+torch.cross(v,torch.cross(v,vec[1]))/(1+cosine)
+    #vec[1] -= torch.round(vec[1]/boxsize)*boxsize
+    return vec.flatten()
 
 #Initialization
 r0 = 2**(1/6.0)
@@ -76,7 +111,7 @@ start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width+0.95*r0
+dist_init = r0#+2*width+0.95*r0
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
@@ -90,23 +125,25 @@ dimer_sim_fts = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).de
 
 #Construct FTSSimulation
 #ftsoptimizer = FTSImplicitUpdate(ftslayer.parameters(), dimN = 6, deltatau=0.005,kappa=0.2,periodic=True,dim=3)
-ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.9,kappa=0.2,periodic=True,dim=3)
+ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.5,nesterov=True,kappa=0.5,periodic=True,dim=3)
 batch_size = 10
 period = 10
 datarunner_fts = FTSSimulation(dimer_sim_fts, nn_training = False, period=period, batch_size=batch_size, dimN=6)
 
 #FTS Simulation Training Loop
 with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
-    for i in tqdm.tqdm(range(300)):
+    for i in tqdm.tqdm(range(30000)):
         # get data and reweighting factors
         configs = datarunner_fts.runSimulation()
-        ftsoptimizer.step(configs,len(configs),boxsize=10.0,remove_nullspace=dimer_nullspace)#,reset_orient=reset_orientation)
+        ftsoptimizer.step(configs,len(configs),boxsize=10.0,remove_nullspace=dimer_nullspace,reset_orient=reset_orientation)
         string_temp = ftslayer.string[rank].view(2,3)
-        #print(torch.norm(string_temp[0][0]-string_temp[0][1]),r0,torch.norm(string_temp[-1][0]-string_temp[-1][1]),r0+2*width)
+        
         f.write("2 \n")
-        f.write("#FTS step {} \n".format(i+1))
-        f.write("1 {} {} {} {} \n".format(0.5*r0,string_temp[0,0],string_temp[0,1], string_temp[0,2]))##String config number "+rank+"\n")
-        f.write("1 {} {} {} {} \n".format(0.5*r0,string_temp[1,0],string_temp[1,1], string_temp[1,2]))##String config number "+rank+"\n")
+        f.write('Lattice=\"10.0 0.0 0.0 0.0 10.0 0.0 0.0 0.0 10.0\" ')
+        f.write('Origin=\"-5.0 -5.0 -5.0\" ')
+        f.write("Properties=type:S:1:pos:R:3:aux1:R:1 \n")
+        f.write("2 {} {} {} {} \n".format(string_temp[0,0],string_temp[0,1], string_temp[0,2],0.5*r0))
+        f.write("2 {} {} {} {} \n".format(string_temp[1,0],string_temp[1,1], string_temp[1,2],0.5*r0))
         f.flush()
         g.write("{} {} \n".format((i+1)*period,torch.norm(string_temp[0]-string_temp[1])))
         g.flush()
