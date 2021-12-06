@@ -278,10 +278,12 @@ void Dimer::DumpXYZBias(int val=0) {
     // Turns off flushing of out before in
     cin.tie(NULL);
     config_file << 2 << endl;
-    config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
-    config_file << "\n";
+    //config_file << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
+    config_file << "Lattice=\"" << std::scientific << box[0] << " 0.0 0.0 " << "0.0 " << std::scientific << box[1] << " 0.0 0.0 0.0 " << std::scientific << box[2] << "\" ";
+    config_file << "Origin=\"" << std::scientific << -5.0 << " " << std::scientific << -5.0 << " " << std::scientific << -5.0 << "\" ";
+    config_file << "Properties=type:S:1:pos:R:3:aux1:R:1 \n";
     for(int i=0; i<2; i++) {
-        config_file << "1 " << std::scientific << 0.5*r_0 << " " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
+        config_file << "1 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << " " << std::scientific << 0.5*r_0 << "\n";
     }
 }
 

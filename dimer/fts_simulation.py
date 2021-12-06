@@ -71,7 +71,6 @@ def dimer_nullspace(vec,x,boxsize):
     new_x[1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
     return new_x.flatten()
 
-
 @torch.no_grad()
 def reset_orientation(vec,boxsize):
     #Remove center of mass 
@@ -111,7 +110,7 @@ start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0#+2*width+0.95*r0
+dist_init = r0+2*width+0.95*r0
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
@@ -125,7 +124,7 @@ dimer_sim_fts = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).de
 
 #Construct FTSSimulation
 #ftsoptimizer = FTSImplicitUpdate(ftslayer.parameters(), dimN = 6, deltatau=0.005,kappa=0.2,periodic=True,dim=3)
-ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.5,nesterov=True,kappa=0.5,periodic=True,dim=3)
+ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.02,kappa=0.2,periodic=True,dim=3)
 batch_size = 10
 period = 10
 datarunner_fts = FTSSimulation(dimer_sim_fts, nn_training = False, period=period, batch_size=batch_size, dimN=6)

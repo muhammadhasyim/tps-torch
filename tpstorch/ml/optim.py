@@ -249,7 +249,7 @@ class FTSImplicitUpdate(Optimizer):
         super(FTSImplicitUpdate, self).__setstate__(state)
 
     @torch.no_grad()
-    def step(self, configs, batch_size,boxsize):#,remove_nullspace):
+    def step(self, configs, batch_size,boxsize,remove_nullspace):
         """Performs a single optimization step.
 
         """
@@ -262,18 +262,16 @@ class FTSImplicitUpdate(Optimizer):
                 if p.requires_grad is True:
                     print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
-                ## (1) Compute the average configuration
+                ## (1.a) Compute the average configuration
                 avgconfig = torch.zeros_like(p)
                 avgconfig[_rank] = torch.mean(configs,dim=0)
+                ## (1.b) Compute the rotated and translated average configuration
+                if self.periodic == True:
+                    avgconfig[_rank] = remove_nullspace(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
                 dist.all_reduce(avgconfig)
                 
                 ## (1) Implicit Stochastic Gradient Descent
                 force = p.clone()+group['lr']*(avgconfig)#[1:-1]
-                #if self.periodic == True:
-                #    force = remove_nullspace(force,avgconfig)
-                
-                #if _rank == 0:
-                #    print(p)
                 p.zero_()
                 p.add_(torch.matmul(self.matrix_inverse, force.t().flatten()).view(-1,_world_size).t())#.clone().detach()
                 
@@ -341,7 +339,7 @@ class FTSUpdate(Optimizer):
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, configs, batch_size,boxsize,remove_nullspace):
+    def step(self, configs, batch_size,boxsize,remove_nullspace,reset_orient = None):
         """Performs a single optimization step.
         """
 
@@ -363,8 +361,6 @@ class FTSUpdate(Optimizer):
                 if self.periodic == True:
                     avgconfig[_rank] = remove_nullspace(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
                 dist.all_reduce(avgconfig)
-                
-                #dist.all_reduce(projected_p)
                 
                 ## (2) Stochastic Gradient Descent
                 d_p = torch.zeros_like(p)
@@ -409,6 +405,13 @@ class FTSUpdate(Optimizer):
                 #of the desired  configuration,
                 #Now interpolate back to the correct parametrization
                 newstring = torch.zeros_like(p)
+                if self.periodic == True and reset_orient is not None:
+                    newstring[_rank] = reset_orient(p[_rank].clone(),boxsize)
+                    dist.all_reduce(newstring)
+                    p.zero_()
+                    p.add_(newstring.clone().detach())
+                    newstring.zero_()
+                
                 newstring[0] = p[0].clone()/_world_size
                 newstring[-1] = p[-1].clone()/_world_size
                 if _rank > 0 and _rank < _world_size-1:

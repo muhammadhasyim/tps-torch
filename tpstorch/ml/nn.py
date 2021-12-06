@@ -560,6 +560,7 @@ class _BKELoss(_Loss):
         self.n_bc_samples = n_bc_samples
         self.batch_size_bc = batch_size_bc
         
+        #Make sure to flatten the configs
         self.prod_configs = torch.zeros(self.n_bc_samples, start_prod.shape[0]*start_prod.shape[1], dtype=torch.float)
         self.react_configs = torch.zeros_like(self.prod_configs)
         self.zl = [torch.zeros(1) for i in range(_world_size)]
@@ -571,7 +572,7 @@ class _BKELoss(_Loss):
         for i in range(self.n_bc_samples):
             for j in range(bc_period):
                 bc_sampler.step_bc()
-            self.prod_configs[i] = bc_sampler.getConfig()
+            self.prod_configs[i] = bc_sampler.getConfig().view(-1)
         
         #Next, sample reactant basin
         if _rank == 0:
@@ -580,7 +581,7 @@ class _BKELoss(_Loss):
         for i in range(self.n_bc_samples):
             for j in range(bc_period):
                 bc_sampler.step_bc()
-            self.react_configs[i] = bc_sampler.getConfig()
+            self.react_configs[i] = bc_sampler.getConfig().view(-1)#flatten()
 
     def compute_bc(self):
         """Computes the loss due to the boundary conditions.
@@ -943,8 +944,8 @@ class BKELossEXP(_BKELoss):
 
     def forward(self, gradients, inv_normconstants, fwd_weightfactors, bwrd_weightfactors):
         self.main_loss = self.compute_bkeloss(gradients, inv_normconstants, fwd_weightfactors, bwrd_weightfactors)
-        self.bc_loss = self.compute_bc()
-        return self.main_loss+self.bc_loss
+        #self.bc_loss = self.compute_bc()
+        return self.main_loss#+self.bc_loss
 
 class BKELossFTS(_BKELoss):
     r"""Loss function corresponding to the variational form of the Backward 

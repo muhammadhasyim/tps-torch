@@ -97,7 +97,6 @@ class FTSLayerCustom(FTSLayer):
         ##(2) Rotate the configuration
         dx /= torch.norm(dx)
         ds /= torch.norm(ds)
-        new_x = torch.zeros_like(x)    
         v = torch.cross(dx,ds)
         cosine = torch.dot(ds,dx)
         new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)

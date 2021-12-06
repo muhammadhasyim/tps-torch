@@ -98,8 +98,8 @@ class Dimer {
         vector<float> phi_storage;
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
-        string config_filename = "config.xyz";
-        string log_filename = "log.txt";
+        string config_filename = "config";
+        string log_filename = "log";
         ofstream config_file;
         ofstream log_file;
 

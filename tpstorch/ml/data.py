@@ -265,7 +265,7 @@ class EXPReweightStringSimulation:
         self.sampler.computeFactors()#self.out)
         
         #Backprop to compute gradients w.r.t. x
-        self.out.backward()
+        #self.out.backward()
     
     def runSimulation(self):
         ## Create storage entries
@@ -303,15 +303,15 @@ class EXPReweightStringSimulation:
             self.out = self.committor(self.sampler.torch_config)
             
             #Backprop to compute gradients of x
-            self.out.backward()
+            #self.out.backward()
 
             if torch.sum(torch.isnan(self.out)) > 0:
                 raise ValueError("Committor value is NaN!")
             else:
                 
                 #Compute all for all storage entries
-                configs[i,:] = self.sampler.torch_config
-                grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
+                configs[i,:] = self.sampler.torch_config.flatten()
+                grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0].reshape(-1)
                 reciprocal_normconstant[i] = self.sampler.reciprocal_normconstant
                 fwd_weightfactor[i,:] = self.sampler.fwd_weightfactor
                 bwrd_weightfactor[i,:] = self.sampler.bwrd_weightfactor
