@@ -102,8 +102,8 @@ class FTSLayerUSCustom(FTSLayerUS):
         new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         dX = x.flatten()-new_string.flatten()
-        tangent_dx = torch.sum(self.tangent[_rank]*(dX))
-        return -self.kappa_perpend*dX#+(self.kappa_parallel-self.kappa_perpend)*self.tangent[_rank]*tangent_dx
+        tangent_dx = torch.sum(self.tangent[_rank]*dX)
+        return -self.kappa_perpend*dX-(self.kappa_parallel-self.kappa_perpend)*self.tangent[_rank]*tangent_dx
     
     def forward(self,x):
         ##(1) Remove center of mass 

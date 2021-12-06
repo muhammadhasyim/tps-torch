@@ -48,9 +48,10 @@ end[1][2] = 0.5*dist_init
 #committor = CommittorNet(d=6,num_nodes=2500).to('cpu')
 committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 
-kappa = 600#10
+kappa_perp = 600#10
+kappa_par = 600
 #Initialize the string for FTS method
-ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=kappa,kappa_parallel=kappa).to('cpu')
+ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=kappa_perp,kappa_parallel=kappa_par).to('cpu')
 
 #Load the pre-initialized neural network and string
 committor.load_state_dict(torch.load("initial_1hl_nn"))
@@ -61,7 +62,7 @@ n_boundary_samples = 100
 batch_size = 64
 period = 25
 dimer_sim_bc = DimerFTSUS(param="param_bc",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
-dimer_sim = DimerFTSUS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = kappa, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=1)#batch_size*period)
+dimer_sim = DimerFTSUS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = kappa_perp, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 
 #Construct FTSSimulation
 datarunner = EXPReweightStringSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=6)
@@ -99,7 +100,7 @@ for epoch in range(1):
         # (2) Update the neural network
         # forward + backward + optimize
         cost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
-        cost.backward(retain_graph=True)
+        cost.backward()
         
         optimizer.step()
 
