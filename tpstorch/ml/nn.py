@@ -581,7 +581,7 @@ class _BKELoss(_Loss):
         for i in range(self.n_bc_samples):
             for j in range(bc_period):
                 bc_sampler.step_bc()
-            self.react_configs[i] = bc_sampler.getConfig().view(-1)#flatten()
+            self.react_configs[i] = bc_sampler.getConfig().view(-1)
 
     def compute_bc(self):
         """Computes the loss due to the boundary conditions.
@@ -944,8 +944,8 @@ class BKELossEXP(_BKELoss):
 
     def forward(self, gradients, inv_normconstants, fwd_weightfactors, bwrd_weightfactors):
         self.main_loss = self.compute_bkeloss(gradients, inv_normconstants, fwd_weightfactors, bwrd_weightfactors)
-        #self.bc_loss = self.compute_bc()
-        return self.main_loss#+self.bc_loss
+        self.bc_loss = self.compute_bc()
+        return self.main_loss+self.bc_loss
 
 class BKELossFTS(_BKELoss):
     r"""Loss function corresponding to the variational form of the Backward 
