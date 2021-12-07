@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -90,9 +93,9 @@ committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0).to('cpu')
 
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_nn"))
+committor.load_state_dict(torch.load("../initial_1hl_nn"))
 kT = 1.0
-ftslayer.load_state_dict(torch.load("test_string_config"))
+ftslayer.load_state_dict(torch.load("../test_string_config"))
 
 n_boundary_samples = 100
 batch_size = 8
@@ -101,7 +104,7 @@ dimer_sim_bc = DimerFTS(param="param_bc",config=ftslayer.string[rank].view(2,3).
 dimer_sim = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 
 #Construct FTSSimulation
-ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.001,momentum=0.5,nesterov=True,kappa=0.2,periodic=True,dim=3)
+ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.02,momentum=0.9,nesterov=True,kappa=0.1,periodic=True,dim=3)
 datarunner = FTSSimulation(dimer_sim, committor = committor, nn_training = True, period=period, batch_size=batch_size, dimN=6)
 
 #Initialize main loss function and optimizers
@@ -138,7 +141,6 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
             
             # (2) Update the neural network
             # forward + backward + optimize
-            #cost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
             cost = loss(grad_xs, dimer_sim.rejection_count)
             cost.backward()
             

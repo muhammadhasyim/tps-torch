@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -5,12 +8,12 @@ import torch.distributed as dist
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from dimer_us import DimerUS
+from dimer_ftsus import DimerFTSUS
 from committor_nn import CommittorNet, CommittorNetDR
-from tpstorch.ml.data import EXPReweightSimulation
+from dimer_ftsus import FTSLayerUSCustom as FTSLayer
+from tpstorch.ml.data import FTSSimulation, EXPReweightStringSimulation
 from tpstorch.ml.optim import ParallelSGD, ParallelAdam
 from tpstorch.ml.nn import BKELossEXP
-#from tpstorch.ml.nn import BKELossFTS, BKELossEXP, FTSCommittorLoss, CommittorLoss2
 import numpy as np
 
 #Grag the MPI group in tpstorch
@@ -31,38 +34,40 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 
 #Reactant
-dist_init = r0#-0.95*r0
+dist_init = r0
 start = torch.zeros((2,3))
 start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width#+0.95*r0
+dist_init = r0+2*width
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
 
-def initializer(s):
-    return (1-s)*start+s*end
-initial_config = initializer(rank/(world_size-1))
 
 #Initialize neural net
+#committor = CommittorNet(d=6,num_nodes=2500).to('cpu')
 committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 
-kappa= 600#10
+kappa_perp = 200.0#60#10
+kappa_par = 500.0#60
 #Initialize the string for FTS method
+ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=kappa_perp,kappa_parallel=kappa_par).to('cpu')
+
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_us_nn"))
+committor.load_state_dict(torch.load("../initial_1hl_ftsus_nn"))
 kT = 1.0
+ftslayer.load_state_dict(torch.load("../test_string_config"))
 
 n_boundary_samples = 100
 batch_size = 8
 period = 25
-dimer_sim_bc = DimerUS(param="param_bc",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, output_time=batch_size*period)
-dimer_sim = DimerUS(param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = kappa, save_config=True, mpi_group = mpi_group, output_time=batch_size*period)
+dimer_sim_bc = DimerFTSUS(param="param_bc",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim = DimerFTSUS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = kappa_perp, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 
 #Construct FTSSimulation
-datarunner = EXPReweightSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=6)
+datarunner = EXPReweightStringSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=6)
 
 #Initialize main loss function and optimizers
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
@@ -81,13 +86,13 @@ loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
 #Training loop
-optimizer = ParallelAdam(committor.parameters(), lr=1.5e-3)
+optimizer = ParallelAdam(committor.parameters(), lr=1e-3)
 
 #We can train in terms of epochs, but we will keep it in one epoch
 for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
-    for i in tqdm.tqdm(range(1000)):#20000)):
+    for i in tqdm.tqdm(range(1000)):
         # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         

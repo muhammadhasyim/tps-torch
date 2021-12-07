@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -6,11 +9,10 @@ import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
 from dimer_us import DimerUS
-from committor_nn import CommittorNet, CommittorNetDR
+from committor_nn import CommittorNetDR
 from tpstorch.ml.data import EXPReweightSimulation
-from tpstorch.ml.optim import ParallelSGD, ParallelAdam
-from tpstorch.ml.nn import BKELossEXP, CommittorLoss2
-#from tpstorch.ml.nn import BKELossFTS, BKELossEXP, FTSCommittorLoss, CommittorLoss2
+from tpstorch.ml.optim import ParallelAdam
+from tpstorch.ml.nn import BKELossEXP
 import numpy as np
 
 #Grag the MPI group in tpstorch
@@ -52,7 +54,7 @@ committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 kappa= 600#10
 #Initialize the string for FTS method
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_us_nn"))
+committor.load_state_dict(torch.load("../initial_1hl_nn"))
 kT = 1.0
 
 n_boundary_samples = 100
@@ -60,7 +62,6 @@ batch_size = 8
 period = 25
 dimer_sim_bc = DimerUS(param="param_bc",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, output_time=batch_size*period)
 dimer_sim = DimerUS(param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = kappa, save_config=True, mpi_group = mpi_group, output_time=batch_size*period)
-dimer_sim_com = DimerUS(param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0,save_config=True, mpi_group = mpi_group, output_time=batch_size*period)
 
 #Construct FTSSimulation
 datarunner = EXPReweightSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=6)
@@ -78,21 +79,6 @@ loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
                     batch_size_bc = 0.5,
                     )
 
-cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
-                        committor = committor,
-                        lambda_cl=100.0,
-                        cl_start=10,
-                        cl_end=200,
-                        cl_rate=10,
-                        cl_trials=50,
-                        batch_size_cl=0.5
-                        )
-
-lambda_cl_end = 10**4
-cl_start=200
-cl_end=10000
-cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
-
 loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
@@ -103,14 +89,8 @@ optimizer = ParallelAdam(committor.parameters(), lr=1.5e-3)
 for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
-    for i in tqdm.tqdm(range(10000)):#20000)):
+    for i in tqdm.tqdm(range(1000)):
         # get data and reweighting factors
-        if (i > cl_start) and (i <= cl_end):
-            cmloss.lambda_cl += cl_stepsize
-        #    if rank == 0:
-        #        print('lambda_cl is now {:.5E}'.format(cmloss.lambda_cl))
-        elif i > cl_end:
-            cmloss.lambda_cl = lambda_cl_end
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         
         # zero the parameter gradients
@@ -118,10 +98,8 @@ for epoch in range(1):
         
         # (2) Update the neural network
         # forward + backward + optimize
-        bkecost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
-        cmcost = cmloss(i, dimer_sim.getConfig())
-        cost = bkecost+cmcost
-        cost.backward()#retain_graph=True)
+        cost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
+        cost.backward()
         
         optimizer.step()
 
@@ -129,10 +107,9 @@ for epoch in range(1):
         with torch.no_grad():
             #if counter % 10 == 0:
             main_loss = loss.main_loss
-            cm_loss = cmloss.cl_loss
             bc_loss = loss.bc_loss
             
-            loss_io.write('{:d} {:.5E} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item(),cm_loss.item()))#/cmloss.lambda_cl))
+            loss_io.write('{:d} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))
             loss_io.flush()
             #Print statistics 
             if rank == 0:

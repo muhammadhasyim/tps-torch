@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -6,13 +9,11 @@ import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
 from dimer_ftsus import DimerFTSUS
-from dimer_fts import DimerFTS
 from committor_nn import CommittorNet, CommittorNetDR
 from dimer_ftsus import FTSLayerUSCustom as FTSLayer
 from tpstorch.ml.data import FTSSimulation, EXPReweightStringSimulation
-from tpstorch.ml.optim import ParallelSGD, ParallelAdam
+from tpstorch.ml.optim import ParallelAdam
 from tpstorch.ml.nn import BKELossEXP, CommittorLoss2
-#from tpstorch.ml.nn import BKELossFTS, BKELossEXP, FTSCommittorLoss, CommittorLoss2
 import numpy as np
 
 #Grag the MPI group in tpstorch
@@ -33,13 +34,13 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 
 #Reactant
-dist_init = r0-0.95*r0
+dist_init = r0
 start = torch.zeros((2,3))
 start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width+0.95*r0
+dist_init = r0+2*width
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
@@ -55,16 +56,16 @@ kappa_par = 600
 ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=kappa_perp,kappa_parallel=kappa_par).to('cpu')
 
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_nn"))
+committor.load_state_dict(torch.load("../initial_1hl_nn"))
 kT = 1.0
-ftslayer.load_state_dict(torch.load("test_string_config"))
+ftslayer.load_state_dict(torch.load("../test_string_config"))
 
 n_boundary_samples = 100
 batch_size = 8
 period = 25
-dimer_sim_bc = DimerFTS(param="param_bc",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim_bc = DimerFTSUS(param="param_bc",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa =0.0, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 dimer_sim = DimerFTSUS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = kappa_perp, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
-dimer_sim_com = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim_com = DimerFTSUS(param="param",config=ftslayer.string[rank].view(2,3).clone().detach(), rank=rank, beta=1/kT, kappa = 0.0,save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 
 #Construct FTSSimulation
 datarunner = EXPReweightStringSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=6)
@@ -84,22 +85,22 @@ loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
 
 cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
                         committor = committor,
-                        lambda_cl=10.0,
-                        cl_start=100,
+                        lambda_cl=100.0,
+                        cl_start=10,
                         cl_end=200,
-                        cl_rate=1,
+                        cl_rate=10,
                         cl_trials=50,
                         batch_size_cl=0.5
                         )
+
 
 loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
 #Training loop
 optimizer = ParallelAdam(committor.parameters(), lr=3e-3)
-#optimizer = ParallelSGD(committor.parameters(), lr=5e-4,momentum=0.95)#,nesterov=True)
 
-lambda_cl_end = 10**4
+lambda_cl_end = 10**3
 cl_start=200
 cl_end=10000
 cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
@@ -112,11 +113,8 @@ for epoch in range(1):
     for i in tqdm.tqdm(range(20000)):
         if (i > cl_start) and (i <= cl_end):
             cmloss.lambda_cl += cl_stepsize
-        #    if rank == 0:
-        #        print('lambda_cl is now {:.5E}'.format(cmloss.lambda_cl))
         elif i > cl_end:
             cmloss.lambda_cl = lambda_cl_end
-        # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         
         # zero the parameter gradients

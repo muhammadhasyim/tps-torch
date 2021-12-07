@@ -104,34 +104,33 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 
 #Reactant
-dist_init = r0-0.95*r0
+dist_init = r0
 start = torch.zeros((2,3))
 start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width+0.95*r0
+dist_init = r0+2*width
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
 
 #Initialize the string
-ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0).to('cpu')#,kappa_perpend=0.0,kappa_parallel=0.0).to('cpu')
+ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0).to('cpu')
 
-#Initialize the dimer
-kT = 1.0#1.0
-dimer_sim_fts = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).detach().clone(), rank=rank, beta=1/kT, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer)
 
 #Construct FTSSimulation
-#ftsoptimizer = FTSImplicitUpdate(ftslayer.parameters(), dimN = 6, deltatau=0.005,kappa=0.2,periodic=True,dim=3)
-ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.02,kappa=0.2,periodic=True,dim=3)
+ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.05,momentum=0.9,nesterov=True, kappa=0.1,periodic=True,dim=3)
+kT = 1.0
 batch_size = 10
 period = 10
+#Initialize the dimer
+dimer_sim_fts = DimerFTS(param="param",config=ftslayer.string[rank].view(2,3).detach().clone(), rank=rank, beta=1/kT, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 datarunner_fts = FTSSimulation(dimer_sim_fts, nn_training = False, period=period, batch_size=batch_size, dimN=6)
 
 #FTS Simulation Training Loop
 with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
-    for i in tqdm.tqdm(range(30000)):
+    for i in tqdm.tqdm(range(500)):
         # get data and reweighting factors
         configs = datarunner_fts.runSimulation()
         ftsoptimizer.step(configs,len(configs),boxsize=10.0,remove_nullspace=dimer_nullspace,reset_orient=reset_orientation)
@@ -147,4 +146,4 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
         g.write("{} {} \n".format((i+1)*period,torch.norm(string_temp[0]-string_temp[1])))
         g.flush()
         if rank == 0:
-            torch.save(ftslayer.state_dict(), "final_{}".format(i))
+            torch.save(ftslayer.state_dict(), "test_string_config")

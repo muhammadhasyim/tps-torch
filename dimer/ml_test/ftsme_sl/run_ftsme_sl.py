@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 #Import necessarry tools from torch
 import tpstorch
 import torch
@@ -90,9 +93,10 @@ committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0).to('cpu')
 
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_nn"))
+committor.load_state_dict(torch.load("../initial_1hl_nn"))
 kT = 1.0
-ftslayer.load_state_dict(torch.load("test_string_config"))
+ftslayer.load_state_dict(torch.load("../test_string_config"))
+
 
 n_boundary_samples = 100
 batch_size = 8
@@ -121,13 +125,18 @@ loss = BKELossFTS(  bc_sampler = dimer_sim_bc,
 
 cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
                         committor = committor,
-                        lambda_cl=10.0,
+                        lambda_cl=100.0,
                         cl_start=10,
-                        cl_end=2000,
-                        cl_rate=1,
+                        cl_end=200,
+                        cl_rate=10,
                         cl_trials=50,
                         batch_size_cl=0.5
                         )
+
+lambda_cl_end = 10**3
+cl_start=200
+cl_end=10000
+cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
 
 loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
@@ -135,24 +144,17 @@ loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 #Training loop
 optimizer = ParallelAdam(committor.parameters(), lr=3e-3)
 
-lambda_cl_end = 10**4
-cl_start=200
-cl_end=10000
-cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
 
 #We can train in terms of epochs, but we will keep it in one epoch
 with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
     for epoch in range(1):
         if rank == 0:
             print("epoch: [{}]".format(epoch+1))
-        for i in tqdm.tqdm(range(1000)):#20000)):
+        for i in tqdm.tqdm(range(10000)):
             if (i > cl_start) and (i <= cl_end):
                 cmloss.lambda_cl += cl_stepsize
-            #    if rank == 0:
-            #        print('lambda_cl is now {:.5E}'.format(cmloss.lambda_cl))
             elif i > cl_end:
                 cmloss.lambda_cl = lambda_cl_end
-            # get data and reweighting factors
             configs, grad_xs  = datarunner.runSimulation()
             
             # zero the parameter gradients
@@ -160,7 +162,6 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
             
             # (2) Update the neural network
             # forward + backward + optimize
-            #cost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
             bkecost = loss(grad_xs, dimer_sim.rejection_count)
             cmcost = cmloss(i, dimer_sim.getConfig())
             cost = bkecost+cmcost
