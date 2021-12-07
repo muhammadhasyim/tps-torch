@@ -393,8 +393,8 @@ class EXPReweightSimulation:
             else:
                 
                 #Compute all for all storage entries
-                configs[i,:] = self.sampler.torch_config
-                grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
+                configs[i,:] = self.sampler.torch_config.flatten()
+                grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0].reshape(-1)
                 reciprocal_normconstant[i] = self.sampler.reciprocal_normconstant
                 fwd_weightfactor[i,:] = self.sampler.fwd_weightfactor
                 bwrd_weightfactor[i,:] = self.sampler.bwrd_weightfactor

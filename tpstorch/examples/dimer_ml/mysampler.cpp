@@ -25,6 +25,39 @@ void export_DimerFTS(py::module& m)
     ;
 };
 
+void export_DimerEXP(py::module& m)
+{
+
+    //MH: This line below is added because if you didn't import tpstorch in the test script prior to importing dimer_ml
+    //it can't find the implementation of MLSamplerEXP
+    //py::module_::import("tpstorch.ml._ml");
+    py::class_<DimerEXP, MLSamplerEXP, std::shared_ptr<DimerEXP> > (m, "DimerEXP")
+    .def(py::init< std::string, torch::Tensor, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def("step", &DimerEXP::step)
+    .def("step_unbiased", &DimerEXP::step_unbiased)
+    .def("step_bc", &DimerEXP::step_bc)
+    .def("stepBiased", &DimerEXP::stepBiased)
+    .def("stepUnbiased", &DimerEXP::stepUnbiased)
+    .def("getBondLength", &DimerEXP::getBondLength)
+    .def("getBondLengthConfig", &DimerEXP::getBondLengthConfig)
+    .def("computeW", &DimerEXP::computeW)
+    .def("computeC", &DimerEXP::computeC)
+    .def("computeEnergy", &DimerEXP::computeEnergy)
+    .def("computeFactors", &DimerEXP::computeFactors)
+    .def("computeEnergy", &DimerEXP::computeEnergy)
+    .def("setConfig", &DimerEXP::setConfig)
+    .def("getConfig", &DimerEXP::getConfig)
+    .def("dumpConfig", &DimerEXP::dumpConfig)
+    .def_readwrite("torch_config", &DimerEXP::torch_config)
+    .def_readwrite("fwd_weightfactor", &DimerEXP::fwd_weightfactor)
+    .def_readwrite("bwrd_weightfactor", &DimerEXP::bwrd_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &DimerEXP::reciprocal_normconstant)
+    .def_readwrite("qvals", &DimerEXP::qvals)
+    .def_readwrite("invkT", &DimerEXP::invkT)
+    .def_readwrite("kappa", &DimerEXP::kappa)
+    ;
+};
+
 void export_DimerEXPString(py::module& m)
 {
 
@@ -60,7 +93,7 @@ void export_DimerEXPString(py::module& m)
 
 PYBIND11_MODULE(_dimer_ml, m)
 {
-    //export_Dimer(m);
+    export_DimerEXP(m);
     export_DimerEXPString(m);
     export_DimerFTS(m);
 }

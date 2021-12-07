@@ -2,8 +2,8 @@ from tpstorch.ml import _ml
 from . import _dimer_ml
 
 #Just something to pass the class
-#class MyMLSampler(_dimer_ml.Dimer):
-#    pass
+class MyMLEXPSampler(_dimer_ml.DimerEXP):
+    pass
 
 class MyMLEXPStringSampler(_dimer_ml.DimerEXPString):
     pass
