@@ -104,19 +104,12 @@ class FTSLayerUSCustom(FTSLayerUS):
         #v = torch.cross(dx,ds)
         v = torch.cross(ds,dx)
         cosine = torch.dot(ds,dx)
-<<<<<<< HEAD
-        new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
-        new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
-        dX = x.flatten()-new_string.flatten()
-        tangent_dx = torch.sum(self.tangent[_rank]*dX)
-=======
         #new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         #new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         new_string[0] += torch.cross(v,new_string[0])+torch.cross(v,torch.cross(v,new_string[0]))/(1+cosine)
         new_string[1] += torch.cross(v,new_string[1])+torch.cross(v,torch.cross(v,new_string[1]))/(1+cosine)
         dX = new_x.flatten()-new_string.flatten()
         tangent_dx = torch.dot(self.tangent[_rank],dX)
->>>>>>> da2f3b6... Got all ML methods utilizing FTS method to work on dimer problem.
         return -self.kappa_perpend*dX-(self.kappa_parallel-self.kappa_perpend)*self.tangent[_rank]*tangent_dx
     
     def forward(self,x):

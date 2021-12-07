@@ -48,13 +48,8 @@ end[1][2] = 0.5*dist_init
 #committor = CommittorNet(d=6,num_nodes=2500).to('cpu')
 committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
 
-<<<<<<< HEAD
-kappa_perp = 600#10
-kappa_par = 600
-=======
 kappa_perp = 200.0#60#10
 kappa_par = 500.0#60
->>>>>>> da2f3b6... Got all ML methods utilizing FTS method to work on dimer problem.
 #Initialize the string for FTS method
 ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=kappa_perp,kappa_parallel=kappa_par).to('cpu')
 
@@ -105,11 +100,7 @@ for epoch in range(1):
         # (2) Update the neural network
         # forward + backward + optimize
         cost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
-<<<<<<< HEAD
-        cost.backward()
-=======
         cost.backward()#retain_graph=True)
->>>>>>> da2f3b6... Got all ML methods utilizing FTS method to work on dimer problem.
         
         optimizer.step()
 
