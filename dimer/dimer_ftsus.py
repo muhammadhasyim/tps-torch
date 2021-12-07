@@ -72,8 +72,9 @@ class FTSLayerUSCustom(FTSLayerUS):
     def compute_umbrellaforce(self,x):
         #For now, don't rotate or translate the system
         ##(1) Remove center of mass 
-        new_x = x.view(2,3).clone()
-
+        new_x = x.view(2,3).detach().clone()
+        new_string = self.string[_rank].view(2,3).detach().clone()
+        
         #Compute the pair distance
         dx = (new_x[0]-new_x[1])
         dx = dx-torch.round(dx/self.boxsize)*self.boxsize
@@ -83,10 +84,13 @@ class FTSLayerUSCustom(FTSLayerUS):
         x_com = 0.5*(new_x[0]+new_x[1])
         new_x[0] -= x_com
         new_x[1] -= x_com
+        
         new_string = self.string[_rank].view(2,3).detach().clone()
+        
         #Compute the pair distance
         ds = (new_string[0]-new_string[1])
         ds = ds-torch.round(ds/self.boxsize)*self.boxsize
+        
         
         #Re-compute one of the coordinates and shift to origin
         new_string[0] = ds+new_string[1]
@@ -97,18 +101,28 @@ class FTSLayerUSCustom(FTSLayerUS):
         ##(2) Rotate the configuration
         dx /= torch.norm(dx)
         ds /= torch.norm(ds)
-        v = torch.cross(dx,ds)
+        #v = torch.cross(dx,ds)
+        v = torch.cross(ds,dx)
         cosine = torch.dot(ds,dx)
+<<<<<<< HEAD
         new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         dX = x.flatten()-new_string.flatten()
         tangent_dx = torch.sum(self.tangent[_rank]*dX)
+=======
+        #new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
+        #new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
+        new_string[0] += torch.cross(v,new_string[0])+torch.cross(v,torch.cross(v,new_string[0]))/(1+cosine)
+        new_string[1] += torch.cross(v,new_string[1])+torch.cross(v,torch.cross(v,new_string[1]))/(1+cosine)
+        dX = new_x.flatten()-new_string.flatten()
+        tangent_dx = torch.dot(self.tangent[_rank],dX)
+>>>>>>> da2f3b6... Got all ML methods utilizing FTS method to work on dimer problem.
         return -self.kappa_perpend*dX-(self.kappa_parallel-self.kappa_perpend)*self.tangent[_rank]*tangent_dx
     
     def forward(self,x):
         ##(1) Remove center of mass 
         new_x = x.view(2,3).detach().clone()
-
+        #new_string = self.string[_rank].view(2,3).detach().clone()
         #Compute the pair distance
         dx = (new_x[0]-new_x[1])
         dx = dx-torch.round(dx/self.boxsize)*self.boxsize
@@ -134,12 +148,14 @@ class FTSLayerUSCustom(FTSLayerUS):
         ##(2) Rotate the configuration
         dx /= torch.norm(dx)
         ds /= torch.norm(ds)
-        v = torch.cross(dx,ds)
+        v = torch.cross(ds,dx)
+        #v = torch.cross(dx,ds)
         cosine = torch.dot(ds,dx)
-        new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
-        new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
-        dX = new_string.flatten()-new_x.flatten()
-        
+        #new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
+        #new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
+        new_string[0] += torch.cross(v,new_string[0])+torch.cross(v,torch.cross(v,new_string[0]))/(1+cosine)
+        new_string[1] += torch.cross(v,new_string[1])+torch.cross(v,torch.cross(v,new_string[1]))/(1+cosine)
+        dX = new_x.flatten()-new_string.flatten()
         dist_sq = torch.sum(dX**2)
         tangent_dx = torch.sum(self.tangent[_rank]*dX)
         return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent_dx**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
@@ -165,7 +181,7 @@ class DimerFTSUS(MyMLEXPStringSampler):
     @torch.no_grad() 
     def initialize_from_torchconfig(self, config):
         # Don't have to worry about all that much all, can just set it
-        self.setConfig(config)
+        self.setConfig(config.detach().clone())
     
     @torch.no_grad() 
     def reset(self):
@@ -193,29 +209,45 @@ class DimerFTSUS(MyMLEXPStringSampler):
         except:
             pass
 
-    @torch.no_grad() 
     def step_unbiased(self):
-        self.stepUnbiased()
+        with torch.no_grad():
+            self.stepUnbiased()
+        self.torch_config.requires_grad_()
+        try:
+            self.torch_config.grad.data.zero_()
+        except:
+            pass
 
     @torch.no_grad() 
-    def isProduct(self):
+    def isReactant(self, x = None):
         r0 = 2**(1/6.0)
         s = 0.5*r0
         #Compute the pair distance
-        if self.getBondLength() <= r0:
-            return True
+        if x is None:
+            if self.getBondLength() <= r0:
+                return True
+            else:
+                return False
         else:
-            return False
+            if self.getBondLengthConfig(x) <= r0:
+                return True
+            else:
+                return False
 
     @torch.no_grad() 
-    def isReactant(self):
+    def isProduct(self,x = None):
         r0 = 2**(1/6.0)
         s = 0.5*r0
-        if self.getBondLength() >= r0+2*s:
-            return True
+        if x is None:
+            if self.getBondLength() >= r0+2*s:
+                return True
+            else:
+                return False
         else:
-            return False
-        
+            if self.getBondLengthConfig(x) >= r0+2*s:
+                return True
+            else:
+                return False
     @torch.no_grad() 
     def step_bc(self):
         state_old = self.getConfig().detach().clone()

@@ -106,8 +106,9 @@ class FTSLayerCustom(FTSLayer):
 # within function
 # have omnious committor part that actual committor overrides?
 class DimerFTS(MyMLFTSSampler):
-    def __init__(self,param,config,rank,beta,mpi_group,ftslayer,save_config=False):
+    def __init__(self,param,config,rank,beta,mpi_group,ftslayer,output_time, save_config=False):
         super(DimerFTS, self).__init__(param,config.detach().clone(),rank,beta,mpi_group)
+        self.output_time = output_time
         self.save_config = save_config
         self.timestep = 0
         self.torch_config = config
@@ -126,7 +127,7 @@ class DimerFTS(MyMLFTSSampler):
     @torch.no_grad() 
     def initialize_from_torchconfig(self, config):
         # Don't have to worry about all that much all, can just set it
-        self.setConfig(config)
+        self.setConfig(config.detach().clone())
     
     @torch.no_grad() 
     def reset(self):
@@ -150,30 +151,51 @@ class DimerFTS(MyMLFTSSampler):
             pass
         else:
             self.setConfig(state_old)
+        self.torch_config.requires_grad_()
+        try:
+            self.torch_config.grad.data.zero_()
+        except:
+            pass
 
     def step_unbiased(self):
         with torch.no_grad():
             self.stepUnbiased()
-        #self.setConfig(self.getConfig().detach().clone())
+        self.torch_config.requires_grad_()
+        try:
+            self.torch_config.grad.data.zero_()
+        except:
+            pass
 
     @torch.no_grad() 
-    def isProduct(self):
+    def isReactant(self, x = None):
         r0 = 2**(1/6.0)
         s = 0.5*r0
         #Compute the pair distance
-        if self.getBondLength() <= r0:
-            return True
+        if x is None:
+            if self.getBondLength() <= r0:
+                return True
+            else:
+                return False
         else:
-            return False
+            if self.getBondLengthConfig(x) <= r0:
+                return True
+            else:
+                return False
 
     @torch.no_grad() 
-    def isReactant(self):
+    def isProduct(self,x = None):
         r0 = 2**(1/6.0)
         s = 0.5*r0
-        if self.getBondLength() >= r0+2*s:
-            return True
+        if x is None:
+            if self.getBondLength() >= r0+2*s:
+                return True
+            else:
+                return False
         else:
-            return False
+            if self.getBondLengthConfig(x) >= r0+2*s:
+                return True
+            else:
+                return False
         
     def step_bc(self):
         with torch.no_grad():
@@ -187,5 +209,5 @@ class DimerFTS(MyMLFTSSampler):
 
     def save(self):
         self.timestep += 1
-        if self.save_config and self.timestep % 100 == 0:
+        if self.save_config and self.timestep % self.output_time == 0:
             self.dumpConfig(self.timestep)

@@ -58,6 +58,11 @@ class DimerEXPString : public MLSamplerEXPString
         {
             return system->BondLength();
         }
+        float getBondLengthConfig(const torch::Tensor& state)
+        {
+            setConfig(state);
+            return system->BondLength();
+        }
         
         void stepBiased(const torch::Tensor& bias_forces)
         {
@@ -86,6 +91,7 @@ class DimerEXPString : public MLSamplerEXPString
         {
             //Assume that the torch Tensor is not flattened
             // Dimer 0
+            torch_config.requires_grad_(false);
             for(int i=0; i<3; i++) {
                 system->state[0][i] = state[0][i].item<float>();
                 torch_config[0][i] = state[0][i].item<float>();
@@ -95,6 +101,7 @@ class DimerEXPString : public MLSamplerEXPString
                 system->state[1][i] = state[1][i].item<float>();
                 torch_config[1][i] = state[1][i].item<float>();
             }
+            torch_config.requires_grad_(true);
         };
 
         torch::Tensor getConfig()
@@ -108,7 +115,6 @@ class DimerEXPString : public MLSamplerEXPString
             for(int i=0; i<3; i++) {
                 temp_config[1][i] = system->state[1][i];
             }
-            //torch_config.requires_grad_();
             return temp_config;
         };
 
@@ -161,7 +167,6 @@ class DimerFTS : public MLSamplerFTS
             system->BDStep();
             //Assume that the torch Tensor is not flattened
             // Dimer 0
-            torch_config.set_requires_grad(false);
             for(int i=0; i<3; i++) {
                 torch_config[0][i] = system->state[0][i];
             }
@@ -169,10 +174,14 @@ class DimerFTS : public MLSamplerFTS
             for(int i=0; i<3; i++) {
                 torch_config[1][i] = system->state[1][i];
             }
-            torch_config.requires_grad_();
         };
         float getBondLength()
         {
+            return system->BondLength();
+        }
+        float getBondLengthConfig(const torch::Tensor& state)
+        {
+            setConfig(state);
             return system->BondLength();
         }
         void stepBiased(const torch::Tensor& bias_forces)
@@ -181,7 +190,6 @@ class DimerFTS : public MLSamplerFTS
             system->BDStep();
             float* values  = bias_forces.data_ptr<float>();
             system->BiasStep(values);
-            torch_config.set_requires_grad(false);
             //Assume that the torch Tensor is not flattened
             for(int i=0; i<3; i++) {
                 torch_config[0][i] = system->state[0][i];
@@ -190,7 +198,6 @@ class DimerFTS : public MLSamplerFTS
             for(int i=0; i<3; i++) {
                 torch_config[1][i] = system->state[1][i];
             }
-            torch_config.requires_grad_();
         };
         
         double computeEnergy(const torch::Tensor &state)
@@ -204,7 +211,7 @@ class DimerFTS : public MLSamplerFTS
         {
             //Assume that the torch Tensor is not flattened
             // Dimer 0
-            torch_config.set_requires_grad(false);
+            torch_config.requires_grad_(false);
             for(int i=0; i<3; i++) {
                 system->state[0][i] = state[0][i].item<float>();
                 torch_config[0][i] = state[0][i].item<float>();
@@ -214,22 +221,22 @@ class DimerFTS : public MLSamplerFTS
                 system->state[1][i] = state[1][i].item<float>();
                 torch_config[1][i] = state[1][i].item<float>();
             }
-            torch_config.requires_grad_();
+            torch_config.requires_grad_(true);
         };
 
         torch::Tensor getConfig()
         {
             //Assume that the torch Tensor is not flattened
-            torch_config.set_requires_grad(false);
+            auto temp_config = torch::zeros({2,3},torch::kF32);
             for(int i=0; i<3; i++) {
-                torch_config[0][i] = system->state[0][i];
+                temp_config[0][i] = system->state[0][i];
             }
             // Dimer 1
             for(int i=0; i<3; i++) {
-                torch_config[1][i] = system->state[1][i];
+                temp_config[1][i] = system->state[1][i];
             }
-            torch_config.requires_grad_();
-            return torch_config;
+            //torch_config.requires_grad_();
+            return temp_config;
         };
 
         void dumpConfig(int step)

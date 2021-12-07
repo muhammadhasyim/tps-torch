@@ -96,7 +96,7 @@ class FTSSimulation:
                 else:
                     #Compute all for all storage entries
                     configs[i,:] = self.sampler.torch_config.flatten()
-                    grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0]
+                    grads[i,:] = torch.autograd.grad(self.committor(self.sampler.torch_config), self.sampler.torch_config, create_graph=True)[0].reshape(-1)
             else:
                     configs[i,:] = self.sampler.torch_config.flatten()
 

@@ -441,7 +441,7 @@ class CommittorLoss2(_Loss):
         self.cl_trials = cl_trials
         self.batch_size_cl = batch_size_cl
         
-        self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[0], dtype=torch.float) 
+        self.cl_configs = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), cl_sampler.torch_config.shape[0]*cl_sampler.torch_config.shape[1], dtype=torch.float) 
         self.cl_configs_values = torch.zeros(int((self.cl_end-self.cl_start)/cl_rate+2), dtype=torch.float)
         self.cl_configs_count = 0
     
@@ -482,7 +482,7 @@ class CommittorLoss2(_Loss):
             
             #Save the committor values and initial configuration 
             self.cl_configs_values[0] = np.mean(counts) 
-            self.cl_configs[0] = initial_config.detach().clone()
+            self.cl_configs[0] = initial_config.detach().clone().reshape(-1)
             self.cl_configs_count += 1
             
             # Now compute loss
@@ -498,7 +498,7 @@ class CommittorLoss2(_Loss):
                 print("Rank [{}] finishes committor calculation: {} +/- {}".format(_rank, np.mean(counts), np.std(counts)/len(counts)**0.5),flush=True)
                 configs_count = self.cl_configs_count
                 self.cl_configs_values[configs_count] = np.mean(counts) 
-                self.cl_configs[configs_count] = initial_config.detach().clone()
+                self.cl_configs[configs_count] = initial_config.detach().clone().reshape(-1)
                 self.cl_configs_count += 1
             
             # Compute loss by sub-sampling however many batches we have at the moment
