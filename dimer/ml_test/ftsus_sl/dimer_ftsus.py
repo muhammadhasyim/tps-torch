@@ -64,6 +64,11 @@ class FTSLayerUSCustom(FTSLayerUS):
             ds[i] /= torch.norm(ds[i])
             v = torch.cross(dx,ds[i])
             cosine = torch.dot(ds[i],dx)
+            if cosine < 0:
+                new_string[i] *= -1
+                ds[i] *= -1
+                v *= -1
+                cosine = torch.dot(ds[i],dx)
             new_x[i,0] = old_x[0] +torch.cross(v,old_x[0])+torch.cross(v,torch.cross(v,old_x[0]))/(1+cosine)
             new_x[i,1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
         return torch.sum((new_string.view(_world_size,6)-new_x.view(_world_size,6))**2,dim=1)
@@ -104,11 +109,17 @@ class FTSLayerUSCustom(FTSLayerUS):
         #v = torch.cross(dx,ds)
         v = torch.cross(ds,dx)
         cosine = torch.dot(ds,dx)
+        if cosine < 0:
+            ds *= -1
+            new_string *= -1
+            v *= -1
+            cosine = torch.dot(ds,dx)
         #new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         #new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         new_string[0] += torch.cross(v,new_string[0])+torch.cross(v,torch.cross(v,new_string[0]))/(1+cosine)
         new_string[1] += torch.cross(v,new_string[1])+torch.cross(v,torch.cross(v,new_string[1]))/(1+cosine)
         dX = new_x.flatten()-new_string.flatten()
+        dX = dX-torch.round(dX/self.boxsize)*self.boxsize
         tangent_dx = torch.dot(self.tangent[_rank],dX)
         return -self.kappa_perpend*dX-(self.kappa_parallel-self.kappa_perpend)*self.tangent[_rank]*tangent_dx
     
@@ -144,11 +155,17 @@ class FTSLayerUSCustom(FTSLayerUS):
         v = torch.cross(ds,dx)
         #v = torch.cross(dx,ds)
         cosine = torch.dot(ds,dx)
+        if cosine < 0:
+            ds *= -1
+            new_string *= -1
+            v *= -1
+            cosine = torch.dot(ds,dx)
         #new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         #new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         new_string[0] += torch.cross(v,new_string[0])+torch.cross(v,torch.cross(v,new_string[0]))/(1+cosine)
         new_string[1] += torch.cross(v,new_string[1])+torch.cross(v,torch.cross(v,new_string[1]))/(1+cosine)
         dX = new_x.flatten()-new_string.flatten()
+        dX = dX-torch.round(dX/self.boxsize)*self.boxsize
         dist_sq = torch.sum(dX**2)
         tangent_dx = torch.sum(self.tangent[_rank]*dX)
         return dist_sq+(self.kappa_parallel-self.kappa_perpend)*tangent_dx**2/self.kappa_perpend#torch.sum((tangent*(self.string-x))**2,dim=1)
