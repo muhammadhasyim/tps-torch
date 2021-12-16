@@ -401,7 +401,7 @@ class FTSUpdate(Optimizer):
                 avgconfig = torch.zeros_like(p)
                 if self.periodic == True:
                     for num in range(batch_size):
-                        configs[num] = remove_nullspace(p[_rank].clone(), configs[num], 10.0)
+                        configs[num] = remove_nullspace(p[_rank].clone(), configs[num], boxsize)
                 avgconfig[_rank] = torch.mean(configs,dim=0)
                 ## (1.b) Compute the rotated and translated average configuration
                 if self.periodic == True:
