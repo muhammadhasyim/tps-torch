@@ -73,7 +73,7 @@ class Dimer {
         void RDFSample();
         // RDF analyzer
         void RDFAnalyzer();
-        
+        void UpdateStates(int i); 
         // Variables
         // Positions
         vector<vector<float>> state;
@@ -126,8 +126,10 @@ class Dimer {
         vector<vector<float>> phi_storage;
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
-        string config = "config.xyz";
+        string config_filename = "config";
+        string log_filename = "log";
         ofstream config_file;
+        ofstream log_file;
 
 };
 

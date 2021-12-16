@@ -67,15 +67,15 @@ void Dimer::GetParams(string name, int rank_in) {
         //cout << "seed_base " << seed_base << " count_step " << count_step << " frame_time " << frame_time << " check_time " << check_time << endl;
         getline(input, line);
         input >> line >> num_solv;
-        //cout << "num_solv is now " << num_solv << endl;
         getline(input, line);
         input >> line >> epsilon;
         //cout << "epsilon is now " << epsilon << endl;
         getline(input, line);
-        input >> line >> dr >> gr_time;
+        input >> line >> config_filename;
         //cout << "dr is now " << dr << " gr_time " << gr_time << endl;
         getline(input, line);
-
+        input >> line >> log_filename;
+        getline(input, line);
         // Initialize system
         // Initialize particles such that they have distance of dist_init
         // Please don't make dist_init greater than box[2]
@@ -123,7 +123,8 @@ void Dimer::GetParams(string name, int rank_in) {
         g_r_storage = vector<vector<float>>(cycles/gr_time,vector<float>(4,0));
     }
     // also modify config path
-    config_file.open("string_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
+    config_file.open(config_filename+"_"+to_string(rank_in)+"_config.xyz", std::ios_base::app);
+    log_file.open(log_filename+"_"+to_string(rank_in)+"_log.txt", std::ios_base::app);
 }
 
 void Dimer::Energy(float& ener_bond, float& ener_wca) {
@@ -311,6 +312,20 @@ void Dimer::NormalNumber(float& rand_0, float& rand_1) {
     rand_0 = rand_0*factor;
     rand_1 = rand_1*factor;
 }
+void Dimer::UpdateStates(int i) {
+    float phi_bond = 0;
+    float phi_wca = 0;
+    Energy(phi_bond,phi_wca);
+    phi = phi_bond+phi_wca;
+    float bond_len = BondLength();
+    // turns off synchronization of C++ streams
+    ios_base::sync_with_stdio(false);
+    // Turns off flushing of out before in
+    cin.tie(NULL);
+    log_file << std::scientific << phi << " " << std::scientific << bond_len << endl;
+    
+    DumpXYZ(config_file);
+}
 
 void Dimer::BDStep() {
     // Perform Brownian Dynamics step
@@ -398,7 +413,7 @@ void Dimer::Equilibriate(int steps) {
     // Run equilibration run
     ofstream config_file_2;
     config_file_2.precision(10);
-    config_file_2.open(config, std::ios_base::app);
+    config_file_2.open(config_filename, std::ios_base::app);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++);
         BDStepEquil();
@@ -420,7 +435,7 @@ void Dimer::Simulate(int steps) {
     // Run simulation
     ofstream config_file_2;
     config_file_2.precision(10);
-    config_file_2.open(config, std::ios_base::app);
+    config_file_2.open(config_filename, std::ios_base::app);
     for(int i=0; i<steps; i++) {
         generator = Saru(seed_base, count_step++);
         BDStep();
