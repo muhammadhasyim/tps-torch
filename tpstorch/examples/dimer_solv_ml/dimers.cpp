@@ -481,10 +481,10 @@ void Dimer::DumpXYZ(ofstream& myfile) {
     myfile << "Time=" << dt*count_step << "\n";
     myfile.precision(10);
     for(int i=0; i<2; i++) {
-        myfile << "B " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
+        myfile << "B " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << " " << std::scientific << 0.5*r_0 << "\n";
     }
     for(int i=2; i<num_particles; i++) {
-        myfile << "A " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << "\n";
+        myfile << "A " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << " " << std::scientific << 0.5*r_0 << "\n";
     }
 }
 

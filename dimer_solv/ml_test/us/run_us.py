@@ -1,5 +1,6 @@
 import sys
 sys.path.append("..")
+sys.path.insert(0,"/global/home/users/muhammad_hasyim/tps-torch/build")
 
 #Import necessarry tools from torch
 import tpstorch
@@ -88,7 +89,7 @@ initial_config = initializer(rank/(world_size-1))
 #committor = torch.jit.script(CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu'))
 committor = torch.jit.script(CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32, rc = 2.5, sigma=1.0).to('cpu'))
 
-kappa= 700#10
+kappa= 600#10
 #Initialize the string for FTS method
 #Load the pre-initialized neural network and string
 #committor.load_state_dict(torch.load("../initial_1hl_nn"))
@@ -100,7 +101,6 @@ batch_size = 8
 period = 5
 dimer_sim_bc = DimerUS(param="param_bc",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, output_time=batch_size*period)
 dimer_sim = DimerUS(param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = kappa, save_config=True, mpi_group = mpi_group, output_time=batch_size*period)
-dimer_sim_com = DimerUS(param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0,save_config=True, mpi_group = mpi_group, output_time=batch_size*period)
 
 #Construct FTSSimulation
 datarunner = EXPReweightSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=Np*3)
@@ -118,11 +118,12 @@ loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
                     batch_size_bc = 0.5,
                     )
 
+
 loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
 #Training loop
-optimizer = ParallelAdam(committor.parameters(), lr=1.0e-3)
+optimizer = ParallelAdam(committor.parameters(), lr=4.0e-4)
 
 #We can train in terms of epochs, but we will keep it in one epoch
 for epoch in range(1):
@@ -148,7 +149,7 @@ for epoch in range(1):
             main_loss = loss.main_loss
             bc_loss = loss.bc_loss
             
-            loss_io.write('{:d} {:.5E} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))#,cm_loss.item()))
+            loss_io.write('{:d} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))
             loss_io.flush()
             #Print statistics 
             if rank == 0:
