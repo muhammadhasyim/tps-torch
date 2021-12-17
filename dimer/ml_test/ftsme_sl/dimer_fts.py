@@ -33,7 +33,7 @@ class FTSLayerCustom(FTSLayer):
     @torch.no_grad()
     def compute_metric(self,x):
         ##(1) Remove center of mass 
-        old_x = x.view(2,3).clone()
+        old_x = x.view(2,3).detach().clone()
 
         #Compute the pair distance
         dx = (old_x[0]-old_x[1])
@@ -45,7 +45,7 @@ class FTSLayerCustom(FTSLayer):
         old_x[0] -= x_com
         old_x[1] -= x_com
         
-        new_string = self.string.view(_world_size,2,3).clone()
+        new_string = self.string.view(_world_size,2,3).detach().clone()
         
         #Compute the pair distance
         ds = (new_string[:,0]-new_string[:,1])
@@ -64,14 +64,18 @@ class FTSLayerCustom(FTSLayer):
             ds[i] /= torch.norm(ds[i])
             v = torch.cross(dx,ds[i])
             cosine = torch.dot(ds[i],dx)
+            if cosine < 0:
+                new_string[i] *= -1
+                ds[i] *= -1
+                v *= -1
+                cosine = torch.dot(ds[i],dx)
             new_x[i,0] = old_x[0] +torch.cross(v,old_x[0])+torch.cross(v,torch.cross(v,old_x[0]))/(1+cosine)
             new_x[i,1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
         return torch.sum((new_string.view(_world_size,6)-new_x.view(_world_size,6))**2,dim=1)
     
     def forward(self,x):
         ##(1) Remove center of mass 
-        new_x = x.view(2,3).clone()
-
+        new_x = x.view(2,3).detach().clone()
         #Compute the pair distance
         dx = (new_x[0]-new_x[1])
         dx = dx-torch.round(dx/self.boxsize)*self.boxsize
@@ -82,7 +86,7 @@ class FTSLayerCustom(FTSLayer):
         new_x[0] -= x_com
         new_x[1] -= x_com
         
-        new_string = self.string[_rank].view(2,3).clone()
+        new_string = self.string[_rank].view(2,3).detach().clone()
         
         #Compute the pair distance
         ds = (new_string[0]-new_string[1])
@@ -99,6 +103,11 @@ class FTSLayerCustom(FTSLayer):
         ds /= torch.norm(ds)
         v = torch.cross(dx,ds)
         cosine = torch.dot(ds,dx)
+        if cosine < 0:
+            ds *= -1
+            new_string *= -1
+            v *= -1
+            cosine = torch.dot(ds,dx)
         new_x[0] += torch.cross(v,new_x[0])+torch.cross(v,torch.cross(v,new_x[0]))/(1+cosine)
         new_x[1] += torch.cross(v,new_x[1])+torch.cross(v,torch.cross(v,new_x[1]))/(1+cosine)
         return torch.sum((new_string.view(_world_size,6)-new_x.flatten())**2)
