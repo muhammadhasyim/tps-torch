@@ -57,43 +57,42 @@ void export_DimerSolvEXP(py::module& m)
     ;
 };
 
-/*
-void export_DimerEXPString(py::module& m)
+void export_DimerSolvEXPString(py::module& m)
 {
 
     //MH: This line below is added because if you didn't import tpstorch in the test script prior to importing dimer_ml
     //it can't find the implementation of MLSamplerEXPString
     //py::module_::import("tpstorch.ml._ml");
-    py::class_<DimerEXPString, MLSamplerEXPString, std::shared_ptr<DimerEXPString> > (m, "DimerEXPString")
+    py::class_<DimerSolvEXPString, MLSamplerEXPString, std::shared_ptr<DimerSolvEXPString> > (m, "DimerSolvEXPString")
     .def(py::init< std::string, torch::Tensor, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
-    .def("step", &DimerEXPString::step)
-    .def("step_unbiased", &DimerEXPString::step_unbiased)
-    .def("step_bc", &DimerEXPString::step_bc)
-    .def("stepBiased", &DimerEXPString::stepBiased)
-    .def("stepUnbiased", &DimerEXPString::stepUnbiased)
-    .def("getBondLength", &DimerEXPString::getBondLength)
-    .def("getBondLengthConfig", &DimerEXPString::getBondLengthConfig)
-    .def("computeW", &DimerEXPString::computeW)
-    .def("computeC", &DimerEXPString::computeC)
-    .def("computeEnergy", &DimerEXPString::computeEnergy)
-    .def("computeFactors", &DimerEXPString::computeFactors)
-    .def("computeEnergy", &DimerEXPString::computeEnergy)
-    .def("setConfig", &DimerEXPString::setConfig)
-    .def("getConfig", &DimerEXPString::getConfig)
-    .def("dumpConfig", &DimerEXPString::dumpConfig)
-    .def_readwrite("torch_config", &DimerEXPString::torch_config)
-    .def_readwrite("fwd_weightfactor", &DimerEXPString::fwd_weightfactor)
-    .def_readwrite("bwrd_weightfactor", &DimerEXPString::bwrd_weightfactor)
-    .def_readwrite("reciprocal_normconstant", &DimerEXPString::reciprocal_normconstant)
-    .def_readwrite("distance_sq_list", &DimerEXPString::distance_sq_list)
-    .def_readwrite("invkT", &DimerEXPString::invkT)
-    .def_readwrite("kappa", &DimerEXPString::kappa)
+    .def("step", &DimerSolvEXPString::step)
+    .def("step_unbiased", &DimerSolvEXPString::step_unbiased)
+    .def("step_bc", &DimerSolvEXPString::step_bc)
+    .def("stepBiased", &DimerSolvEXPString::stepBiased)
+    .def("stepUnbiased", &DimerSolvEXPString::stepUnbiased)
+    .def("getBondLength", &DimerSolvEXPString::getBondLength)
+    .def("getBondLengthConfig", &DimerSolvEXPString::getBondLengthConfig)
+    .def("computeW", &DimerSolvEXPString::computeW)
+    .def("computeC", &DimerSolvEXPString::computeC)
+    .def("computeEnergy", &DimerSolvEXPString::computeEnergy)
+    .def("computeFactors", &DimerSolvEXPString::computeFactors)
+    .def("computeEnergy", &DimerSolvEXPString::computeEnergy)
+    .def("setConfig", &DimerSolvEXPString::setConfig)
+    .def("getConfig", &DimerSolvEXPString::getConfig)
+    .def("dumpConfig", &DimerSolvEXPString::dumpConfig)
+    .def_readwrite("torch_config", &DimerSolvEXPString::torch_config)
+    .def_readwrite("fwd_weightfactor", &DimerSolvEXPString::fwd_weightfactor)
+    .def_readwrite("bwrd_weightfactor", &DimerSolvEXPString::bwrd_weightfactor)
+    .def_readwrite("reciprocal_normconstant", &DimerSolvEXPString::reciprocal_normconstant)
+    .def_readwrite("distance_sq_list", &DimerSolvEXPString::distance_sq_list)
+    .def_readwrite("invkT", &DimerSolvEXPString::invkT)
+    .def_readwrite("kappa", &DimerSolvEXPString::kappa)
     ;
 };
-*/
+
 PYBIND11_MODULE(_dimer_solv_ml, m)
 {
     export_DimerSolvEXP(m);
-    //export_DimerEXPString(m);
+    export_DimerSolvEXPString(m);
     export_DimerSolvFTS(m);
 }

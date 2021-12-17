@@ -126,11 +126,10 @@ class DimerSolvEXP : public MLSamplerEXP
         std::shared_ptr<Dimer> system;
 };
 
-/*
-class DimerEXPString : public MLSamplerEXPString
+class DimerSolvEXPString : public MLSamplerEXPString
 {
     public:
-        DimerEXPString(std::string param_file, const torch::Tensor& config, int rank, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+        DimerSolvEXPString(std::string param_file, const torch::Tensor& config, int rank, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
             : MLSamplerEXPString(config, mpi_group), system(new Dimer())
         {
             //Load parameters during construction
@@ -138,9 +137,10 @@ class DimerEXPString : public MLSamplerEXPString
             
             // Initialize state
             //Assume that the torch Tensor is not flattened
-            num_particles = system->num_particles;
+            num_particles = system->num_particles; 
+            // Initialize state
+            //Assume that the torch Tensor is not flattened
             torch_config = torch::zeros({num_particles,3},torch::kF32);
-            
             // Dimer 0
             for (int j = 0; j < num_particles; j++)
             {
@@ -156,7 +156,7 @@ class DimerEXPString : public MLSamplerEXPString
             system->k_umb = in_kappa;
             torch_config.requires_grad_();
         }
-        ~DimerEXPString(){}; 
+        ~DimerSolvEXPString(){}; 
         
         void stepUnbiased()
         {
@@ -198,9 +198,9 @@ class DimerEXPString : public MLSamplerEXPString
         double computeEnergy(const torch::Tensor &state)
         {
             setConfig(state);
-            float energy;
-            system->Energy(energy);
-            return energy;
+            float energy_bond, energy_wca;
+            system->Energy(energy_bond, energy_wca);
+            return energy_bond+energy_wca;
         }; 
         void setConfig(const torch::Tensor& state)
         {
@@ -240,10 +240,9 @@ class DimerEXPString : public MLSamplerEXPString
     private:
         //The Dimer simulator 
         //I did shared_ptr so that it can clean up itself during destruction
-        std::shared_ptr<Dimer> system;
         int num_particles;
+        std::shared_ptr<Dimer> system;
 };
-*/
 
 class DimerSolvFTS : public MLSamplerFTS
 {

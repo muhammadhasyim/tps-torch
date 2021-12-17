@@ -5,9 +5,8 @@ from . import _dimer_solv_ml
 class MyMLEXPSampler(_dimer_solv_ml.DimerSolvEXP):
     pass
 
-"""
-class MyMLEXPStringSampler(_dimer_ml.DimerEXPString):
+class MyMLEXPStringSampler(_dimer_solv_ml.DimerSolvEXPString):
     pass
-"""
+
 class MyMLFTSSampler(_dimer_solv_ml.DimerSolvFTS):
     pass
