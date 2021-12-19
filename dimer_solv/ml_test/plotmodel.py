@@ -16,8 +16,9 @@ prefix = 'simple'
 #Initialize neural net
 #committor = CommittorNetDR(d=1,num_nodes=200).to('cpu')
 box = [14.736125994561544, 14.736125994561544, 14.736125994561544]
-committor = CommittorNetBP(num_nodes=200, boxsize=box[0]).to('cpu')
-committor.load_state_dict(torch.load("us_sl/{}_params_t_230_0".format(prefix)))
+#committor = CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu')
+committor = torch.jit.script(CommittorNetBP(num_nodes=200, boxsize=box[0], Np =32, rc=2.5, sigma=1.0).to('cpu'))
+committor.load_state_dict(torch.load("ftsus/{}_params_t_631_0".format(prefix)))
 
 #Initialize neural net
 def initializer(s):
@@ -91,6 +92,6 @@ plt.figure(figsize=(5,5))
 #Neural net solution vs. exact solution
 plt.plot(x,y,'-')
 plt.plot(data[:,0],data[:,1],'--')
-plt.savefig('test.png')
-plt.close()
-#plt.show()
+#plt.savefig('test.png')
+#plt.close()
+plt.show()

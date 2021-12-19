@@ -15,7 +15,7 @@ from dimer_fts_nosolv import FTSLayerCustom as FTSLayer
 from tpstorch.ml.data import FTSSimulation#, EXPReweightStringSimulation
 from tpstorch.ml.optim import ParallelSGD, ParallelAdam, FTSUpdate
 #from tpstorch.ml.nn import BKELossEXP
-from tpstorch.ml.nn import BKELossFTS
+from tpstorch.ml.nn import BKELossFTS, CommittorLoss2
 import numpy as np
 
 #Grag the MPI group in tpstorch
@@ -143,8 +143,9 @@ n_boundary_samples = 100
 batch_size = 8
 period = 25
 #Initialize the dimer simulation
-dimer_sim_bc = DimerFTS(param="param",config=initial_config.detach().clone(), rank=rank, beta=1/kT, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim_bc = DimerFTS(param="param_bc",config=initial_config.detach().clone(), rank=rank, beta=1/kT, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 dimer_sim = DimerFTS(param="param",config=initial_config.detach().clone(), rank=rank, beta=1/kT, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim_com = DimerFTS(param="param",config=initial_config.detach().clone(), rank=rank, beta=1/kT, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 
 #Construct FTSSimulation
 ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.02,momentum=0.9,nesterov=True,kappa=0.1,periodic=True,dim=3)
@@ -164,11 +165,25 @@ loss = BKELossFTS(  bc_sampler = dimer_sim_bc,
                     tol = 5e-10,
                     mode= 'shift')
 
+cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
+                        committor = committor,
+                        lambda_cl=100.0,
+                        cl_start=10,
+                        cl_end=200,
+                        cl_rate=10,
+                        cl_trials=50,
+                        batch_size_cl=0.5
+                        )
+
 loss_io = []
 loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
 #Training loop
 optimizer = ParallelAdam(committor.parameters(), lr=3e-3)
+lambda_cl_end = 10**3
+cl_start=200
+cl_end=10000
+cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
 
 #We can train in terms of epochs, but we will keep it in one epoch
 with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
@@ -176,6 +191,10 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
         if rank == 0:
             print("epoch: [{}]".format(epoch+1))
         for i in tqdm.tqdm(range(10000)):#20000)):
+            if (i > cl_start) and (i <= cl_end):
+                cmloss.lambda_cl += cl_stepsize
+            elif i > cl_end:
+                cmloss.lambda_cl = lambda_cl_end
             # get data and reweighting factors
             configs, grad_xs  = datarunner.runSimulation()
             
@@ -184,7 +203,10 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
             
             # (2) Update the neural network
             # forward + backward + optimize
-            cost = loss(grad_xs, dimer_sim.rejection_count)
+            bkecost = loss(grad_xs, dimer_sim.rejection_count)
+            bkecost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
+            cmcost = cmloss(i, dimer_sim.getConfig())
+            cost = bkecost+cmcost
             cost.backward()
             
             optimizer.step()
