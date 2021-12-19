@@ -330,6 +330,7 @@ void Dimer::UpdateStates(int i) {
 void Dimer::BDStep() {
     // Perform Brownian Dynamics step
     // Initialize random numbers
+    generator = Saru(seed_base, count_step++);
     vector<float> random_num(3*num_particles,0.0);
     for(int i=0; i<(3*num_particles)/2; i++) {
         NormalNumber(random_num[2*i], random_num[2*i+1]);
@@ -362,6 +363,7 @@ void Dimer::BDStep() {
 void Dimer::BDStepEquil() {
     // Perform Brownian Dynamics step
     // Initialize random numbers
+    generator = Saru(seed_base, count_step++);
     vector<float> random_num(3*num_particles,0.0);
     for(int i=0; i<(3*num_particles)/2; i++) {
         NormalNumber(random_num[2*i], random_num[2*i+1]);
@@ -437,7 +439,6 @@ void Dimer::Simulate(int steps) {
     config_file_2.precision(10);
     config_file_2.open(config_filename, std::ios_base::app);
     for(int i=0; i<steps; i++) {
-        generator = Saru(seed_base, count_step++);
         BDStep();
         if(i%check_time==0) {
             float phi_bond = 0;
