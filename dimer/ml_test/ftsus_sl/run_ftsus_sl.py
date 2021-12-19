@@ -59,6 +59,9 @@ ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_n
 committor.load_state_dict(torch.load("../initial_1hl_nn"))
 kT = 1.0
 ftslayer.load_state_dict(torch.load("../test_string_config"))
+ftslayer.set_tangent()
+print(ftslayer.string)
+print(ftslayer.tangent)
 
 n_boundary_samples = 100
 batch_size = 8

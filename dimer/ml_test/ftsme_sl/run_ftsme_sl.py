@@ -62,6 +62,11 @@ def dimer_nullspace(vec,x,boxsize):
     new_x = torch.zeros_like(old_x)    
     v = torch.cross(dx,ds)
     cosine = torch.dot(ds,dx)
+    if cosine < 0:
+        dx *= -1
+        v *= -1
+        old_x *= -1
+        cosine = torch.dot(ds,dx)
     new_x[0] = old_x[0] +torch.cross(v,old_x[0])+torch.cross(v,torch.cross(v,old_x[0]))/(1+cosine)
     new_x[1] = old_x[1] +torch.cross(v,old_x[1])+torch.cross(v,torch.cross(v,old_x[1]))/(1+cosine)
     return new_x.flatten()
