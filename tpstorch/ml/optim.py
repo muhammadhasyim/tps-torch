@@ -289,7 +289,7 @@ class FTSImplicitUpdate(Optimizer):
         super(FTSImplicitUpdate, self).__setstate__(state)
 
     @torch.no_grad()
-    def step(self, configs, batch_size,boxsize,remove_nullspace):
+    def step(self, configs, batch_size,boxsize,reorient_sample):
         """Performs a single optimization step.
 
         """
@@ -302,15 +302,14 @@ class FTSImplicitUpdate(Optimizer):
                 if p.requires_grad is True:
                     print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
-                ## (1.a) Compute the average configuration
+                ## (1) Compute the rotated and translated average configuration
                 avgconfig = torch.zeros_like(p)
                 if self.periodic == True:
                     for num in range(batch_size):
-                        configs[num] = remove_nullspace(p[_rank].clone(), configs[num], 10.0)
+                        configs[num] = reorient_sample(p[_rank].clone(), configs[num], 10.0)
                 avgconfig[_rank] = torch.mean(configs,dim=0)
-                ## (1.b) Compute the rotated and translated average configuration
-                if self.periodic == True:
-                    avgconfig[_rank] = remove_nullspace(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
+                #if self.periodic == True:
+                #    avgconfig[_rank] = reorient_sample(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
                 dist.all_reduce(avgconfig)
                 
                 ## (1) Implicit Stochastic Gradient Descent
@@ -382,7 +381,7 @@ class FTSUpdate(Optimizer):
             group.setdefault('nesterov', False)
 
     @torch.no_grad()
-    def step(self, configs, batch_size,boxsize,remove_nullspace,reset_orient = None):
+    def step(self, configs, batch_size,boxsize,reorient_sample):
         """Performs a single optimization step.
         """
 
@@ -397,15 +396,14 @@ class FTSUpdate(Optimizer):
                     #print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!") 
                     print("Warning! String stored in Rank [{}] has gradient enabled. Make sure that the string is not being updated during NN training!".format(_rank)) 
 
-                ## (1.a) Compute the average configuration
+                ## (1) Compute the rotated and translated average configuration
                 avgconfig = torch.zeros_like(p)
                 if self.periodic == True:
                     for num in range(batch_size):
-                        configs[num] = remove_nullspace(p[_rank].clone(), configs[num], boxsize)
+                        configs[num] = reorient_sample(p[_rank].clone(), configs[num], boxsize)
                 avgconfig[_rank] = torch.mean(configs,dim=0)
-                ## (1.b) Compute the rotated and translated average configuration
                 if self.periodic == True:
-                    avgconfig[_rank] = remove_nullspace(p[_rank].clone(),avgconfig[_rank],boxsize)#configs)
+                    avgconfig[_rank] = reorient_sample(p[_rank].clone(),avgconfig[_rank],boxsize)
                 dist.all_reduce(avgconfig)
                 
                 ## (2) Stochastic Gradient Descent
@@ -416,7 +414,6 @@ class FTSUpdate(Optimizer):
                 if freeze is False:
                     d_p[0] = (p[0]-avgconfig[0])
                     d_p[-1] = (p[-1]-avgconfig[-1])
-                #Add in the Laplacian term
                 
                 if momentum != 0:
                     param_state = self.state[p]
@@ -451,12 +448,6 @@ class FTSUpdate(Optimizer):
                 #of the desired  configuration,
                 #Now interpolate back to the correct parametrization
                 newstring = torch.zeros_like(p)
-                if self.periodic == True and reset_orient is not None:
-                    newstring[_rank] = reset_orient(p[_rank].clone(),boxsize)
-                    dist.all_reduce(newstring)
-                    p.zero_()
-                    p.add_(newstring.clone().detach())
-                    newstring.zero_()
                 
                 newstring[0] = p[0].clone()/_world_size
                 newstring[-1] = p[-1].clone()/_world_size
