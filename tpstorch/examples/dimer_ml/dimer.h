@@ -59,6 +59,8 @@ class Dimer {
         void DumpStates();
         // Input state
         void UseRestart();
+        // Dump restart
+        void DumpRestart();
         
         // Variables
         // Positions
@@ -99,10 +101,10 @@ class Dimer {
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
         string config_filename = "config";
+        string restart_filename = "restart";
         string log_filename = "log";
         ofstream config_file;
         ofstream log_file;
-
 };
 
 #endif

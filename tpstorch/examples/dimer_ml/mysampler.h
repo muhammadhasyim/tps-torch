@@ -128,6 +128,18 @@ class DimerEXP : public MLSamplerEXP
             //system->DumpXYZBias(dump);
             system->UpdateStates(step);
         };
+
+        void dumpRestart()
+        {
+            //Dump a file we can restart from easily
+            system->DumpRestart();
+        };
+
+        void useRestart()
+        {
+            // Use restart file
+            system->UseRestart();
+        };
     private:
         //The Dimer simulator 
         //I did shared_ptr so that it can clean up itself during destruction
