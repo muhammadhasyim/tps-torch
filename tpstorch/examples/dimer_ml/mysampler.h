@@ -139,6 +139,7 @@ class DimerEXP : public MLSamplerEXP
         {
             // Use restart file
             system->UseRestart();
+            torch_config.requires_grad_(false);
             //Assume that the torch Tensor is not flattened
             for(int i=0; i<3; i++) {
                 torch_config[0][i] = system->state[0][i];
