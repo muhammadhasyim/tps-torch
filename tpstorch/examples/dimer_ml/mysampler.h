@@ -139,6 +139,15 @@ class DimerEXP : public MLSamplerEXP
         {
             // Use restart file
             system->UseRestart();
+            //Assume that the torch Tensor is not flattened
+            for(int i=0; i<3; i++) {
+                torch_config[0][i] = system->state[0][i];
+            }
+            // Dimer 1
+            for(int i=0; i<3; i++) {
+                torch_config[1][i] = system->state[1][i];
+            }
+            torch_config.requires_grad_(true);
         };
     private:
         //The Dimer simulator 
