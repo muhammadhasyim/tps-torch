@@ -8,7 +8,7 @@ import torch.distributed as dist
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from committor_nn import CommittorNetDR, CommittorNetBP
+from committor_nn import CommittorNetDR, CommittorNetBP, SchNet
 #from tpstorch.ml.data import FTSSimulation, EXPReweightStringSimulation
 from tpstorch.ml.optim import ParallelSGD, ParallelAdam#, FTSImplicitUpdate, FTSUpdate
 #from tpstorch.ml.nn import BKELossFTS, BKELossEXP, FTSCommittorLoss, FTSLayer
@@ -40,7 +40,7 @@ dist_init_start = r0
 dist_init_end = r0+2*width
 
 #scale down/up the distance of one of the particle dimer
-box = [14.736125994561544, 14.736125994561544, 14.736125994561544]
+box = [8.617738760127533, 8.617738760127533, 8.617738760127533]
 def CubicLattice(dist_init):
     state = torch.zeros(Np, 3);
     num_spacing = np.ceil(Np**(1/3.0))
@@ -80,11 +80,11 @@ start = CubicLattice(dist_init_start)
 end = CubicLattice(dist_init_end)
 initial_config = initializer(rank/(world_size-1))
 
-committor = CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32,rc=2.5,sigma=1.0).to('cpu')
+committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3)
 
 #Initial Training Loss
 initloss = nn.MSELoss()
-initoptimizer = ParallelAdam(committor.parameters(), lr=1.0e-2)#,momentum=0.95, nesterov=True)
+initoptimizer = ParallelAdam(committor.parameters(), lr=1.0e-4)#,momentum=0.95, nesterov=True)
 #initoptimizer = ParallelSGD(committor.parameters(), lr=1e-2,momentum=0.95, nesterov=True)
 
 #from torchsummary import summary
@@ -95,12 +95,12 @@ tolerance = 1e-3
 tolerance = 1e-4
 #batch_sizes = [64]
 #for size in batch_sizes:
-for i in tqdm.tqdm(range(10**5)):
+for i in range(10**5):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     
     # forward + backward + optimize
-    q_vals = committor(initial_config.view(-1,Np))
+    q_vals = committor(initial_config.view(-1,3))
     targets = torch.ones_like(q_vals)*rank/(dist.get_world_size()-1)
     cost = initloss(q_vals, targets)#,committor,config,cx)
     cost.backward()
