@@ -237,6 +237,8 @@ class SchNet(torch.nn.Module):
         self.std = std
         self.scale = None
         self.boxsize = boxsize
+        self.Np = Np
+        self.dim = dim
 
         atomic_mass = torch.from_numpy(np.array([1,2]))
         self.register_buffer('atomic_mass', atomic_mass)
@@ -276,15 +278,15 @@ class SchNet(torch.nn.Module):
 
     def forward(self, pos):
         """"""
-        pos = pos.views(-1,self.dim)
-        total_positions = pos.size(dim=0)/
-        num_configs = total_positions/self.Np
+        pos = pos.view(-1,self.dim)
+        total_positions = pos.size(dim=0)
+        num_configs = total_positions//self.Np
         z = torch.zeros((total_positions,1), dtype=torch.int)
         z = z.view(-1,self.Np)
         z[:,0] = 1
         z[:,1] = 1
-        z = z.view(-1,1)
-        batch = torch.zeros(num_configs*self.Np, dtype=torch.int64)
+        z = z.view(-1)
+        batch = torch.zeros(int(num_configs*self.Np), dtype=torch.int64)
         for i in range(num_configs):
             batch[(self.Np*i):(self.Np*(i+1))] = i
         

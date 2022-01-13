@@ -80,7 +80,7 @@ start = CubicLattice(dist_init_start)
 end = CubicLattice(dist_init_end)
 initial_config = initializer(rank/(world_size-1))
 
-committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3)
+committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3).to('cpu')
 
 #Initial Training Loss
 initloss = nn.MSELoss()
@@ -112,10 +112,10 @@ for i in range(10**5):
         if i % 10 == 0 and rank == 0:
             print(i,cost.item() / world_size)#, committor(ftslayer.string[-1]))
         #    torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
-            torch.save(committor.state_dict(), "initial_1hl_nn_bp")#_{}".format(size))#prefix,rank+1))
+            torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
         if cost.item() / world_size < tolerance:
             if rank == 0:
-                torch.save(committor.state_dict(), "initial_1hl_nn_bp")#_{}".format(size))#prefix,rank+1))
+                torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
             print("Early Break!")
             break
     committor.zero_grad()
