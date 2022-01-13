@@ -36,24 +36,26 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 
 #Reactant
-dist_init = r0-0.95*r0
+dist_init = r0-0.20*r0
 start = torch.zeros((2,3))
 start[0][2] = -0.5*dist_init
 start[1][2] = 0.5*dist_init
 
 #Product state
-dist_init = r0+2*width+0.95*r0
+dist_init = r0+2*width+0.20*r0
 end = torch.zeros((2,3))
 end[0][2] = -0.5*dist_init
 end[1][2] = 0.5*dist_init
 
-committor = CommittorNetDR(num_nodes=2500, boxsize=10).to('cpu')
+if rank == 0:
+    print("At NN start stuff")
+
+committor = CommittorNetDR(num_nodes=50, boxsize=10).to('cpu')
 ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=0.0,kappa_parallel=0.0).to('cpu')
-ftslayer.load_state_dict(torch.load("test_string_config"))
 
 #Initial Training Loss
 initloss = nn.MSELoss()
-initoptimizer = ParallelSGD(committor.parameters(), lr=1e-3,momentum=0.95, nesterov=True)
+initoptimizer = ParallelAdam(committor.parameters(), lr=1e-3)
 
 #from torchsummary import summary
 running_loss = 0.0
@@ -63,7 +65,12 @@ tolerance = 1e-3
 tolerance = 1e-4
 #batch_sizes = [64]
 #for size in batch_sizes:
-for i in tqdm.tqdm(range(10**5)):
+loss_io = []
+if rank == 0:
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+if rank == 0:
+    print("Before training")
+for i in range(10**7):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     
@@ -80,9 +87,13 @@ for i in tqdm.tqdm(range(10**5)):
         #if i % 10 == 0 and rank == 0:
         #    print(i,cost.item() / world_size, committor(ftslayer.string[-1]))
         #    torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
+        if rank == 0:
+            loss_io.write("Step {:d} Loss {:.5E}\n".format(i,cost.item()))
+            loss_io.flush()
         if cost.item() / world_size < tolerance:
             if rank == 0:
                 torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
+                torch.save(ftslayer.state_dict(), "test_string_config")#_{}".format(size))#prefix,rank+1))
             print("Early Break!")
             break
     committor.zero_grad()
