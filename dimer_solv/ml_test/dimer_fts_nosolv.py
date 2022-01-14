@@ -169,8 +169,11 @@ class DimerFTS(MyMLFTSSampler):
             pass
         else:
             #This teleports the dimer to the origin. But it should be okay?
+            #Going to set config so that the dimer is that of the string, but rotated in frame
             state_old = self.getConfig().detach().clone()
-            state_old[:2] = self.ftslayer.string[_rank].view(2,3).detach().clone()
+            #state_old[:2] = self.ftslayer.string[_rank].view(2,3).detach().clone()
+            string_old = self.ftslayer.string[_rank].view(2,3).detach().clone()
+            state_old = dimer_reorient(state_old,string_old,ftslayer.boxsize)
             self.setConfig(state_old)
     def computeMetric(self):
         self.distance_sq_list = self.ftslayer.compute_metric(self.getConfig().flatten())
