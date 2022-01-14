@@ -38,10 +38,13 @@ kT = 1.0
 
 initial_config = np.genfromtxt("../restart/config_"+str(rank)+".xyz", usecols=(1,2,3))
 start = np.genfromtxt("../restart_bc/config_"+str(rank)+"_react.xyz", usecols=(1,2,3))
-end = np.genfromtxt("../restart/config_"+str(rank)+"_prod.xyz", usecols=(1,2,3))
+end = np.genfromtxt("../restart_bc/config_"+str(rank)+"_prod.xyz", usecols=(1,2,3))
 initial_config = torch.from_numpy(initial_config)
 start = torch.from_numpy(start)
 end = torch.from_numpy(end)
+initial_config = initial_config.float()
+start = start.float()
+end = initial_config.float()
 
 #Initialize neural net
 #committor = torch.jit.script(CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu'))

@@ -173,7 +173,8 @@ class DimerFTS(MyMLFTSSampler):
             state_old = self.getConfig().detach().clone()
             #state_old[:2] = self.ftslayer.string[_rank].view(2,3).detach().clone()
             string_old = self.ftslayer.string[_rank].view(2,3).detach().clone()
-            state_old = dimer_reorient(state_old,string_old,ftslayer.boxsize)
+            state_old_rot = dimer_reorient(state_old[:2],string_old,self.ftslayer.boxsize)
+            state_old[:2] = state_old_rot.view(2,3).detach().clone()
             self.setConfig(state_old)
     def computeMetric(self):
         self.distance_sq_list = self.ftslayer.compute_metric(self.getConfig().flatten())
