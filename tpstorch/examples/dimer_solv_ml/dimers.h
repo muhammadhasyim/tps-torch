@@ -69,6 +69,8 @@ class Dimer {
         void DumpStates();
         // Input state
         void UseRestart();
+        // Dump restart
+        void DumpRestart();
         // Sample RDF
         void RDFSample();
         // RDF analyzer
@@ -116,6 +118,7 @@ class Dimer {
         int storage_time = 1;
         int frame_time = 10;
         int check_time = 1000;
+        int rank_in_ = 1;
         // g_r variables
         float dr = 0.05;
         int num_bins_gr;
@@ -127,6 +130,7 @@ class Dimer {
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
         string config_filename = "config";
+        string restart_filename = "restart";
         string log_filename = "log";
         ofstream config_file;
         ofstream log_file;

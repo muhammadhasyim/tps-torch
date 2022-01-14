@@ -72,7 +72,7 @@ class Dimer {
         // Dimer system parameters
         // For the bonded part
         // V(r) = height*(1-(r-r_0-width)**2/width**2)**2
-        // F(r) = -dV(r)/dr = height*(r-r_0-width)*(1-(r-r_0-width)**2/width**2)/width**2
+        // F(r) = -dV(r)/dr = 4*height*(r-r_0-width)*(1-(r-r_0-width)**2/width**2)/width**2
         // For the interaction part with (not implemented) solvent, use WCA interactions for everything
         // but the two particles in a dimer
         float height = 1.0; // controls the barrier distance

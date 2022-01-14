@@ -10,7 +10,7 @@ import scipy.spatial
 
 #Import necessarry tools from tpstorch 
 from dimer_fts_nosolv import dimer_reorient, DimerFTS
-from committor_nn import initializeConfig, CommittorNet, CommittorNetBP, CommittorNetDR
+from committor_nn import initializeConfig, CommittorNet, CommittorNetBP, CommittorNetDR, SchNet
 from dimer_fts_nosolv import FTSLayerCustom as FTSLayer
 from tpstorch.ml.data import FTSSimulation
 from tpstorch.ml.optim import ParallelSGD, ParallelAdam, FTSUpdate
@@ -36,16 +36,24 @@ Np = 30+2
 box = [14.736125994561544, 14.736125994561544, 14.736125994561544]
 kT = 1.0
 
-start, end, initial_config = initializeConfig(rank/(world_size-1), r0, width, box,Np)
-
+initial_config = np.genfromtxt("../restart/config_"+str(rank)+".xyz", usecols=(1,2,3))
+start = np.genfromtxt("../restart_bc/config_"+str(rank)+"_react.xyz", usecols=(1,2,3))
+end = np.genfromtxt("../restart_bc/config_"+str(rank)+"_prod.xyz", usecols=(1,2,3))
+initial_config = torch.from_numpy(initial_config)
+start = torch.from_numpy(start)
+end = torch.from_numpy(end)
+initial_config = initial_config.float()
+start = start.float()
+end = initial_config.float()
 
 #Initialize neural net
 #committor = torch.jit.script(CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu'))
-committor = torch.jit.script(CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32,rc=2.5,sigma=1.0).to('cpu'))
+#committor = torch.jit.script(CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32,rc=2.5,sigma=1.0).to('cpu'))
+committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3).to('cpu')
 
 #Initialize the string for FTS method
 ftslayer = FTSLayer(react_config=start[:2].flatten(),prod_config=end[:2].flatten(),num_nodes=world_size,boxsize=box[0],num_particles=2).to('cpu')
-committor.load_state_dict(torch.load("../initial_1hl_nn_bp"))
+committor.load_state_dict(torch.load("initial_1hl_nn", map_location=torch.device('cpu')))
 ftslayer.load_state_dict(torch.load("../test_string_config"))
 
 n_boundary_samples = 100
@@ -75,7 +83,7 @@ dimer_sim = DimerFTS(   param="param",
 datarunner = FTSSimulation(dimer_sim, committor = committor, nn_training = True, period=period, batch_size=batch_size, dimN=Np*3)
 #Construct optimizers
 ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.9,nesterov=True,kappa=0.1,periodic=True,dim=3)
-optimizer = ParallelAdam(committor.parameters(), lr=3e-3)
+optimizer = ParallelAdam(committor.parameters(), lr=1e-4)
 
 #Initialize main loss function
 loss = BKELossFTS(  bc_sampler = dimer_sim_bc,
@@ -91,14 +99,15 @@ loss = BKELossFTS(  bc_sampler = dimer_sim_bc,
                     mode= 'shift')
 
 loss_io = []
-loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+if rank == 0:
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
 
 #Training loop
 with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
     for epoch in range(1):
         if rank == 0:
             print("epoch: [{}]".format(epoch+1))
-        for i in tqdm.tqdm(range(10000)):
+        for i in range(20000):
             # get data and reweighting factors
             configs, grad_xs  = datarunner.runSimulation()
             
@@ -130,8 +139,10 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
                 main_loss = loss.main_loss
                 bc_loss = loss.bc_loss
                 
-                loss_io.write('{:d} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))
-                loss_io.flush()
                 #Print statistics 
                 if rank == 0:
-                    torch.save(committor.state_dict(), "{}_params_t_{}_{}".format(prefix,i,rank))
+                    if i%100 == 0:
+                        torch.save(committor.state_dict(), "{}_params_t_{}_{}".format(prefix,i,rank))
+                        torch.save(ftslayer.state_dict(), "{}_string_t_{}_{}".format(prefix,i,rank))
+                    loss_io.write('{:d} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))
+                    loss_io.flush()
