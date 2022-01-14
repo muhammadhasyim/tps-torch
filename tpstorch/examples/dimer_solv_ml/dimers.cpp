@@ -21,6 +21,7 @@ Dimer::~Dimer() {
 }
 
 void Dimer::GetParams(string name, int rank_in) {
+    rank_in_ = rank_in;
     ifstream input;
     input.open(name);
     if(input.fail()) {
@@ -489,6 +490,25 @@ void Dimer::DumpXYZ(ofstream& myfile) {
     }
 }
 
+void Dimer::DumpRestart() {
+    // turns off synchronization of C++ streams
+    ofstream myfile;
+    myfile.precision(10);
+    myfile.open(restart_filename+"_"+to_string(rank_in_)+".xyz");
+    ios_base::sync_with_stdio(false);
+    // Turns off flushing of out before in
+    cin.tie(NULL);
+    myfile << num_particles << endl;
+    myfile << "# step " << count_step << endl;
+    //myfile << "# step " << count_step << " " << committor << " " << phi << " " << phi_umb << " " << committor_umb;
+    for(int i=0; i<2; i++) {
+        myfile << "1 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << " " << std::scientific << 0.5*r_0 << "\n";
+    }
+    for(int i=2; i<num_particles; i++) {
+        myfile << "0 " << std::scientific << state[i][0] << " " << std::scientific << state[i][1] << " " << std::scientific << state[i][2] << " " << std::scientific << 0.5*r_0 << "\n";
+    }
+}
+
 void Dimer::DumpXYZBias(int val=0) {
     // turns off synchronization of C++ streams
     ios_base::sync_with_stdio(false);
@@ -586,8 +606,19 @@ void Dimer::DumpStates() {
 }
 
 void Dimer::UseRestart() {
-    // Blank function for now
-
+    // Read restart file
+    ifstream input;
+    input.open(restart_filename+"_"+to_string(rank_in_)+".xyz");
+    string line;
+    // Skip first line
+    getline(input, line);
+    input >> line >> line >> count_step;
+    getline(input, line);
+    // Now read in xyz
+    for(int i=0; i<num_particles; i++) {
+        input >> line >> state[i][0] >> state[i][1] >> state[i][2];
+        getline(input, line);
+    }
 }
 
 void Dimer::RDFSample() {
