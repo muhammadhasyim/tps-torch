@@ -173,8 +173,17 @@ class DimerFTS(MyMLFTSSampler):
             state_old = self.getConfig().detach().clone()
             #state_old[:2] = self.ftslayer.string[_rank].view(2,3).detach().clone()
             string_old = self.ftslayer.string[_rank].view(2,3).detach().clone()
-            state_old_rot = dimer_reorient(state_old[:2],string_old,self.ftslayer.boxsize)
-            state_old[:2] = state_old_rot.view(2,3).detach().clone()
+            distance = torch.abs(string_old[1,2]-string_old[0,2])
+            dx = state_old[0]-state_old[1]
+            boxsize = self.ftslayer.boxsize
+            dx = dx-torch.round(dx/boxsize)*boxsize
+            distance_ref = torch.norm(dx)
+            dx_norm = dx/distance_ref
+            mod_dist = 0.5*(distance_ref-distance)
+            state_old[0] = state_old[0]-mod_dist*dx_norm
+            state_old[1] = state_old[1]+mod_dist*dx_norm
+            state_old[0] -= torch.round(state_old[0]/boxsize)*boxsize 
+            state_old[1] -= torch.round(state_old[1]/boxsize)*boxsize 
             self.setConfig(state_old)
     def computeMetric(self):
         self.distance_sq_list = self.ftslayer.compute_metric(self.getConfig().flatten())

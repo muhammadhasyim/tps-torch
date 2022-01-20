@@ -24,8 +24,10 @@ rank = tpstorch._rank
 
 #Import any other thing
 import tqdm, sys
-torch.manual_seed(5070)
-np.random.seed(5070)
+# reload count
+count = int(np.genfromtxt("count.txt"))
+torch.manual_seed(count)
+np.random.seed(count)
 
 prefix = 'simple'
 
@@ -53,39 +55,68 @@ committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3,
 
 #Initialize the string for FTS method
 ftslayer = FTSLayer(react_config=start[:2].flatten(),prod_config=end[:2].flatten(),num_nodes=world_size,boxsize=box[0],num_particles=2).to('cpu')
-committor.load_state_dict(torch.load("initial_1hl_nn", map_location=torch.device('cpu')))
-ftslayer.load_state_dict(torch.load("../test_string_config"))
+committor.load_state_dict(torch.load("simple_params", map_location=torch.device('cpu')))
+ftslayer.load_state_dict(torch.load("simple_string"))
 
 n_boundary_samples = 100
 batch_size = 8
 period = 25
 #Initialize the dimer simulation
-dimer_sim_bc = DimerFTS(param="param_bc",config=initial_config.detach().clone(),rank=rank,beta=1/kT, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period, save_config=False)
-dimer_sim = DimerFTS(param="param",config=initial_config.detach().clone(), rank=rank, beta=1/kT, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period, save_config=True)
+dimer_sim_bc = DimerFTS(param="param_bc",
+                        config=initial_config.detach().clone(), 
+                        rank=rank, 
+                        beta=1/kT, 
+                        save_config=False, 
+                        mpi_group = mpi_group, 
+                        ftslayer=ftslayer,
+                        output_time=batch_size*period
+                        )
+dimer_sim = DimerFTS(   param="param",
+                        config=initial_config.detach().clone(), 
+                        rank=rank, 
+                        beta=1/kT, 
+                        save_config=True, 
+                        mpi_group = mpi_group, 
+                        ftslayer=ftslayer,
+                        output_time=batch_size*period
+                        )
+dimer_sim.useRestart()
 
 #Construct datarunner
 datarunner = FTSSimulation(dimer_sim, committor = committor, nn_training = True, period=period, batch_size=batch_size, dimN=Np*3)
 #Construct optimizers
 ftsoptimizer = FTSUpdate(ftslayer.parameters(), deltatau=0.01,momentum=0.9,nesterov=True,kappa=0.1,periodic=True,dim=3)
 optimizer = ParallelAdam(committor.parameters(), lr=1e-4)
+optimizer.load_state_dict(torch.load("optimizer_params"))
+ftsoptimizer.load_state_dict(torch.load("ftsoptimizer_params"))
 
 #Initialize main loss function
-loss = BKELossFTS(  bc_sampler = dimer_sim_bc,committor = committor,lambda_A = 1e4,lambda_B = 1e4,start_react = start,start_prod = end,n_bc_samples = 100, bc_period = 100,batch_size_bc = 0.5,tol = 5e-10, mode= 'shift')
+loss = BKELossFTS(  bc_sampler = dimer_sim_bc,
+                    committor = committor,
+                    lambda_A = 1e4,
+                    lambda_B = 1e4,
+                    start_react = start,
+                    start_prod = end,
+                    n_bc_samples = 0, 
+                    bc_period = 100,
+                    batch_size_bc = 0.5,
+                    tol = 5e-10,
+                    mode= 'shift')
+# Save reactant, product configurations
+loss.react_configs = torch.load("react_configs_"+str(rank+1)+".pt")
+loss.prod_configs = torch.load("prod_configs_"+str(rank+1)+".pt")
+loss.n_bc_samples = torch.load("n_bc_samples_"+str(rank+1)+".pt")
 
 loss_io = []
 if rank == 0:
-    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'a')
 
 #Training loop
-# Save reactant, product configurations
-torch.save(loss.react_configs, "react_configs_"+str(rank+1)+".pt")
-torch.save(loss.prod_configs, "prod_configs_"+str(rank+1)+".pt")
-torch.save(loss.n_bc_samples, "n_bc_samples_"+str(rank+1)+".pt")
-with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt".format(rank),"w") as g:
+with open("string_{}_config.xyz".format(rank),"a") as f, open("string_{}_log.txt".format(rank),"a") as g:
     for epoch in range(1):
         if rank == 0:
             print("epoch: [{}]".format(epoch+1))
-        for i in range(100):
+        for i in range(count,count+100):#20000)):
             # get data and reweighting factors
             configs, grad_xs  = datarunner.runSimulation()
             dimer_sim.dumpRestart()

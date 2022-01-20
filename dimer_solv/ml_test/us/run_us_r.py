@@ -22,8 +22,10 @@ rank = tpstorch._rank
 
 #Import any other thing
 import tqdm, sys
-torch.manual_seed(5070)
-np.random.seed(5070)
+# reload count
+count = int(np.genfromtxt("count.txt"))
+torch.manual_seed(count)
+np.random.seed(count)
 
 prefix = 'simple'
 
@@ -48,7 +50,7 @@ end = end.float()
 #Initialize neural net
 #committor = torch.jit.script(CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu'))
 committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3).to('cpu')
-committor.load_state_dict(torch.load("initial_1hl_nn", map_location=torch.device('cpu')))
+committor.load_state_dict(torch.load("simple_params", map_location=torch.device('cpu')))
 
 n_boundary_samples = 100
 batch_size = 8
@@ -71,20 +73,13 @@ dimer_sim = DimerUS(    param="param",
                         mpi_group = mpi_group, 
                         output_time=batch_size*period
                         )
-dimer_sim_com = DimerUS(param="param",
-                        config=initial_config.clone().detach(), 
-                        rank=rank, 
-                        beta=1/kT, 
-                        kappa = 0.0, 
-                        save_config=False, 
-                        mpi_group = mpi_group, 
-                        output_time=batch_size*period
-                        )
+dimer_sim.useRestart()
 
 #Construct datarunner
 datarunner = EXPReweightSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=Np*3)
 #Construct optimizers
 optimizer = ParallelAdam(committor.parameters(), lr=1e-4)
+optimizer.load_state_dict(torch.load("optimizer_params"))
 
 #The BKE Loss function, with EXP Reweighting
 loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
@@ -93,46 +88,25 @@ loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
                     lambda_B = 1e4,
                     start_react = start,
                     start_prod = end,
-                    n_bc_samples = 100, 
+                    n_bc_samples = 0, 
                     bc_period = 100,
                     batch_size_bc = 0.5,
                     )
 
-#The supervised learning loss
-cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
-                        committor = committor,
-                        lambda_cl=100.0,
-                        cl_start=10,
-                        cl_end=5000,
-                        cl_rate=10,
-                        cl_trials=100,
-                        batch_size_cl=0.5
-                        )
-
-
 loss_io = []
 if rank == 0:
-    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
-
-lambda_cl_end = 10**3
-cl_start=200
-cl_end=10000
-cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'a')
 
 # Save reactant, product configurations
-torch.save(loss.react_configs, "react_configs_"+str(rank+1)+".pt")
-torch.save(loss.prod_configs, "prod_configs_"+str(rank+1)+".pt")
-torch.save(loss.n_bc_samples, "n_bc_samples_"+str(rank+1)+".pt")
+loss.react_configs = torch.load("react_configs_"+str(rank+1)+".pt")
+loss.prod_configs = torch.load("prod_configs_"+str(rank+1)+".pt")
+loss.n_bc_samples = torch.load("n_bc_samples_"+str(rank+1)+".pt")
 
 #Training loop
 for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
-    for i in range(100):
-        if (i > cl_start) and (i <= cl_end):
-            cmloss.lambda_cl += cl_stepsize
-        elif i > cl_end:
-            cmloss.lambda_cl = lambda_cl_end
+    for i in range(count,count+100):
         # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         dimer_sim.dumpRestart()
@@ -143,8 +117,7 @@ for epoch in range(1):
         # (2) Update the neural network
         # forward + backward + optimize
         bkecost = loss(grad_xs,invc,fwd_wl,bwrd_wl)
-        cmcost = cmloss(i, dimer_sim.getConfig())
-        cost = bkecost+cmcost
+        cost = bkecost
         cost.backward()
         
         optimizer.step()
@@ -152,7 +125,6 @@ for epoch in range(1):
         # print statistics
         with torch.no_grad():
             main_loss = loss.main_loss
-            cm_loss = cmloss.cl_loss
             bc_loss = loss.bc_loss
             
             #Print statistics 
@@ -162,9 +134,5 @@ for epoch in range(1):
                 torch.save(committor.state_dict(), "{}_params".format(prefix))
                 torch.save(optimizer.state_dict(), "optimizer_params")
                 np.savetxt("count.txt", np.array((i+1,)))
-                loss_io.write('{:d} {:.5E} {:.5E} {:.5E}\n'.format(i+1,main_loss.item(),bc_loss.item(),cm_loss.item()))
+                loss_io.write('{:d} {:.5E} {:.5E}\n'.format(i+1,main_loss.item(),bc_loss.item()))
                 loss_io.flush()
-            torch.save(cmloss.lambda_cl, "lambda_cl_"+str(rank+1)+".pt")
-            torch.save(cmloss.cl_configs, "cl_configs_"+str(rank+1)+".pt")
-            torch.save(cmloss.cl_configs_values, "cl_configs_values_"+str(rank+1)+".pt")
-            torch.save(cmloss.cl_configs_count, "cl_configs_count_"+str(rank+1)+".pt")
