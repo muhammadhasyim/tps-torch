@@ -6,12 +6,14 @@ import tpstorch
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+import scipy.spatial
 
 #Import necessarry tools from tpstorch 
-from dimer_us import DimerUS
+from dimer_ftsus_nosolv import DimerFTSUS
 from committor_nn import initializeConfig, CommittorNet, CommittorNetBP, CommittorNetDR, SchNet
-from tpstorch.ml.data import EXPReweightSimulation
-from tpstorch.ml.optim import ParallelAdam
+from dimer_ftsus_nosolv import FTSLayerUSCustom as FTSLayer
+from tpstorch.ml.data import FTSSimulation, EXPReweightStringSimulation
+from tpstorch.ml.optim import ParallelSGD, ParallelAdam
 from tpstorch.ml.nn import BKELossEXP, CommittorLoss2
 import numpy as np
 
@@ -22,8 +24,10 @@ rank = tpstorch._rank
 
 #Import any other thing
 import tqdm, sys
-torch.manual_seed(5070)
-np.random.seed(5070)
+# reload count
+count = int(np.genfromtxt("count.txt"))
+torch.manual_seed(count)
+np.random.seed(count)
 
 prefix = 'simple'
 
@@ -32,7 +36,8 @@ r0 = 2**(1/6.0)
 width =  0.5*r0
 Np = 30+2
 box = [8.617738760127533, 8.617738760127533, 8.617738760127533]
-kappa= 600
+kappa_perp = 400.0
+kappa_par = 400.0
 kT = 1.0
 
 initial_config = np.genfromtxt("../restart/config_"+str(rank)+".xyz", usecols=(1,2,3))
@@ -47,58 +52,70 @@ end = end.float()
 
 #Initialize neural net
 #committor = torch.jit.script(CommittorNetDR(num_nodes=2500, boxsize=box[0]).to('cpu'))
+#committor = torch.jit.script(CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32,rc=2.5,sigma=1.0).to('cpu'))
 committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3).to('cpu')
-committor.load_state_dict(torch.load("initial_1hl_nn", map_location=torch.device('cpu')))
+
+#Initialize the string for FTS method
+ftslayer = FTSLayer(react_config=start[:2].flatten(),prod_config=end[:2].flatten(),num_nodes=world_size,boxsize=box[0],kappa_perpend=kappa_perp, kappa_parallel=kappa_par, num_particles=2).to('cpu')
+#Load the pre-initialized neural network and string
+committor.load_state_dict(torch.load("simple_params", map_location=torch.device('cpu')))
+ftslayer.load_state_dict(torch.load("../test_string_config"))
+ftslayer.set_tangent()
 
 n_boundary_samples = 100
 batch_size = 8
 period = 25
-dimer_sim_bc = DimerUS( param="param_bc",
+dimer_sim_bc = DimerFTSUS(  param="param_bc",
+                            config=initial_config.clone().detach(), 
+                            rank=rank, 
+                            beta=1/kT, 
+                            kappa = 0.0, 
+                            save_config=False, 
+                            mpi_group = mpi_group, 
+                            ftslayer=ftslayer,
+                            output_time=batch_size*period
+                            )
+dimer_sim = DimerFTSUS( param="param",
                         config=initial_config.clone().detach(), 
                         rank=rank, 
                         beta=1/kT, 
-                        kappa = 0.0, 
-                        save_config=False, 
-                        mpi_group = mpi_group, 
-                        output_time=batch_size*period
-                        )
-dimer_sim = DimerUS(    param="param",
-                        config=initial_config.clone().detach(), 
-                        rank=rank, 
-                        beta=1/kT, 
-                        kappa = kappa, 
+                        kappa = kappa_perp, 
                         save_config=True, 
                         mpi_group = mpi_group, 
+                        ftslayer=ftslayer,
                         output_time=batch_size*period
                         )
-dimer_sim_com = DimerUS(param="param",
-                        config=initial_config.clone().detach(), 
-                        rank=rank, 
-                        beta=1/kT, 
-                        kappa = 0.0, 
-                        save_config=False, 
-                        mpi_group = mpi_group, 
-                        output_time=batch_size*period
-                        )
+dimer_sim.useRestart()
+dimer_sim_com = DimerFTSUS(  param="param",
+                            config=initial_config.clone().detach(), 
+                            rank=rank, 
+                            beta=1/kT, 
+                            kappa = 0.0, 
+                            save_config=False, 
+                            mpi_group = mpi_group, 
+                            ftslayer=ftslayer,
+                            output_time=batch_size*period
+                            )
 
 #Construct datarunner
-datarunner = EXPReweightSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=Np*3)
+datarunner = EXPReweightStringSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=Np*3)
 #Construct optimizers
 optimizer = ParallelAdam(committor.parameters(), lr=1e-4)
+optimizer.load_state_dict(torch.load("optimizer_params"))
 
-#The BKE Loss function, with EXP Reweighting
+#Initialize main loss function and optimizers
+#Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
 loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
                     committor = committor,
                     lambda_A = 1e4,
                     lambda_B = 1e4,
                     start_react = start,
                     start_prod = end,
-                    n_bc_samples = 100, 
+                    n_bc_samples = 0, 
                     bc_period = 100,
                     batch_size_bc = 0.5,
                     )
 
-#The supervised learning loss
 cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
                         committor = committor,
                         lambda_cl=100.0,
@@ -112,7 +129,7 @@ cmloss = CommittorLoss2( cl_sampler = dimer_sim_com,
 
 loss_io = []
 if rank == 0:
-    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'a')
 
 lambda_cl_end = 10**3
 cl_start=200
@@ -120,15 +137,20 @@ cl_end=10000
 cl_stepsize = (lambda_cl_end-cmloss.lambda_cl)/(cl_end-cl_start)
 
 # Save reactant, product configurations
-torch.save(loss.react_configs, "react_configs_"+str(rank+1)+".pt")
-torch.save(loss.prod_configs, "prod_configs_"+str(rank+1)+".pt")
-torch.save(loss.n_bc_samples, "n_bc_samples_"+str(rank+1)+".pt")
+loss.react_configs = torch.load("react_configs_"+str(rank+1)+".pt")
+loss.prod_configs = torch.load("prod_configs_"+str(rank+1)+".pt")
+loss.n_bc_samples = torch.load("n_bc_samples_"+str(rank+1)+".pt")
+# cmloss variables
+cmloss.lambda_cl = torch.load("lambda_cl_"+str(rank+1)+".pt")
+cmloss.cl_configs = torch.load("cl_configs_"+str(rank+1)+".pt")
+cmloss.cl_configs_values = torch.load("cl_configs_values_"+str(rank+1)+".pt")
+cmloss.cl_configs_count = torch.load("cl_configs_count_"+str(rank+1)+".pt")
 
 #Training loop
 for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
-    for i in range(100):
+    for i in range(count,count+100):
         if (i > cl_start) and (i <= cl_end):
             cmloss.lambda_cl += cl_stepsize
         elif i > cl_end:
