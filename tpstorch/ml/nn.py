@@ -947,6 +947,117 @@ class BKELossEXP(_BKELoss):
         self.bc_loss = self.compute_bc()
         return self.main_loss+self.bc_loss
 
+class BKELossEXP_2(_BKELoss):
+    r"""Loss function corresponding to the variational form of the Backward Kolmogorov Equation, 
+        which uses fixed reweighting/free energy terms.
+
+    Args:
+        bc_sampler (tpstorch.MLSamplerEXP): the MD/MC sampler used for obtaining configurations in 
+            product and reactant basin.  
+        
+        committor (tpstorch.nn.Module): the committor function, represented as a neural network. 
+        
+        lambda_A (float): penalty strength for enforcing boundary conditions at the reactant basin. 
+        
+        lambda_B (float): penalty strength for enforcing boundary conditions at the product basin. 
+            If None is given, lambda_B=lambda_A
+        
+        start_react (torch.Tensor): starting configuration to sample reactant basin. 
+        
+        start_prod (torch.Tensor): starting configuration to sample product basin.
+       
+        n_bc_samples (int, optional): total number of samples to collect at both product and 
+            reactant basin. 
+
+        bc_period (int, optional): the number of timesteps to collect one configuration during 
+            sampling at either product and reactant basin.
+
+        batch_size_bc (float, optional): size of mini-batch for the boundary condition loss during 
+            gradient descent, expressed as fraction of n_bc_samples.
+
+        mode (string, optional): the mode for EXP reweighting. If mode is 'random', then the 
+            reference umbrella window is chosen randomly at every iteration. If it's not random, 
+            then ref_index must be supplied.
+
+        ref_index (int, optional): a fixed chosen umbrella window for computing the reweighting 
+            factors. 
+    """
+
+    def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, 
+                 mode='random', ref_index=None):
+        super(BKELossEXP_2, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                                        start_prod, n_bc_samples, bc_period, batch_size_bc)
+        self.mode = mode 
+        if self.mode != 'random':
+            if ref_index is not None:
+                self.ref_index = int(ref_index)
+            else:
+                raise TypeError
+    
+    def compute_bkeloss(self, gradients, inv_normconstants, zl):
+        """Computes the loss corresponding to the varitional form of the BKE including 
+            the EXP reweighting factors. 
+            
+            Independent computation is first done on individual MPI process. First, we compute 
+            the following quantities at every 'l'-th MPI process: 
+
+            .. math::
+                L_l = \frac{1}{2} \sum_{x \in M_l} |\grad q(x)|^2/c(x) ,
+                
+                c_l = \sum_{ x \in M_l} 1/c(x) ,
+            
+            where :math: $M_l$ is the mini-batch collected by the l-th MPI
+            process. We then collect the computation to compute the main loss as
+
+            .. math::
+                \ell_{main} = \frac{\sum_{l=1}^{S-1} L_l z_l)}{\sum_{l=1}^{S-1} c_l z_l)}
+            where :math: 'S' is the MPI world size. 
+
+            Args:
+                gradients (torch.Tensor): mini-batch of \grad q(x). First dimension is the size of
+                    the mini-batch while the second is system size (flattened).
+                
+                inv_normconstants (torch.Tensor): mini-batch of 1/c(x).
+
+                fwd_weightfactors (torch.Tensor): mini-batch of w_{l+1}/w_{l}, which are forward 
+                    ratios of the umbrella potential Boltzmann factors stored by the l-th umbrella 
+                    window/MPI process
+                
+                bwrd_weightfactors (torch.Tensor): mini-batch of w_{l-1}/w_{l}, which are forward 
+                    ratios of the umbrella potential Boltzmann factors stored by the l-th umbrella 
+                    window/MPI process
+            
+            Note that PyTorch does not track arithmetic operations during MPI
+            collective calls. Thus, the last sum containing L_l is not reflected 
+            in the computational graph tracked by individual MPI process. The 
+            final gradients will be collected in each respective optimizer.
+        """
+        main_loss = torch.zeros(1) 
+        
+        #Compute the first part of the loss
+        #main_loss =  0.5*torch.sum(torch.mean(gradients*gradients*inv_normconstants.view(-1,1),dim=0));
+        
+        main_loss = 0.5*torch.sum(((gradients*gradients).t() @ inv_normconstants)/len(inv_normconstants))
+        #print(((gradients*gradients).t() @ inv_normconstants).shape,inv_normconstants.view(-1,1).shape)
+        
+        #Use it first to compute the mean inverse normalizing constant 
+        mean_recipnormconst = torch.mean(inv_normconstants)
+        mean_recipnormconst.mul_(zl[_rank])
+        #All reduce the mean invnormalizing constant
+        dist.all_reduce(mean_recipnormconst)
+        
+        #renormalize main_loss
+        main_loss *= zl[_rank]
+        dist.all_reduce(main_loss)
+        main_loss /= mean_recipnormconst
+        return main_loss
+
+    def forward(self, gradients, inv_normconstants, zl):
+        self.main_loss = self.compute_bkeloss(gradients, inv_normconstants, zl)
+        self.bc_loss = self.compute_bc()
+        return self.main_loss+self.bc_loss
+
 class BKELossFTS(_BKELoss):
     r"""Loss function corresponding to the variational form of the Backward 
         Kolmogorov Equation, which includes reweighting by exponential (EXP)
@@ -1073,6 +1184,88 @@ class BKELossFTS(_BKELoss):
 
     def forward(self, gradients, rejection_counts):
         self.main_loss = self.compute_bkeloss(gradients, rejection_counts)
+        self.bc_loss = self.compute_bc()
+        return self.main_loss+self.bc_loss
+
+class BKELossFTS_2(_BKELoss):
+    r"""Loss function corresponding to the variational form of the Backward 
+        Kolmogorov Equation, which includes reweighting by exponential (EXP)
+        averaging. 
+
+    Args:
+        bc_sampler (tpstorch.MLSamplerEXP): the MD/MC sampler used for obtaining
+        configurations in product and reactant basin.  
+        
+        committor (tpstorch.nn.Module): the committor function, represented 
+        as a neural network. 
+        
+        lambda_A (float): penalty strength for enforcing boundary conditions at 
+            the reactant basin. 
+        
+        lambda_B (float): penalty strength for enforcing boundary 
+        conditions at the product basin. If None is given, lambda_B=lambda_A
+        
+        start_react (torch.Tensor): starting configuration to sample reactant 
+        basin. 
+        
+        start_prod (torch.Tensor): starting configuration to sample product 
+        basin
+       
+        n_bc_samples (int, optional): total number of samples to collect at both
+        product and reactant basin. 
+
+        bc_period (int, optional): the number of timesteps to collect one 
+        configuration during sampling at either product and reactant basin.
+
+        batch_size_bc (float, optional): size of mini-batch for the boundary 
+        condition loss during gradient descent, expressed as fraction of 
+        n_bc_samples.
+    """
+
+    def __init__(self, bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                 start_prod, n_bc_samples=320, bc_period=10, batch_size_bc=0.1, tol=5e-9, mode='noshift'):
+        super(BKELossFTS_2, self).__init__(bc_sampler, committor, lambda_A, lambda_B, start_react, 
+                                        start_prod, n_bc_samples, bc_period, batch_size_bc)
+        self.tol = tol
+        self.mode = mode
+        if mode != 'noshift' and mode != 'shift':
+            raise RuntimeError("The only available modes are 'shift' or 'noshift'!")
+    
+    def compute_bkeloss(self, gradients, zl):
+        """Computes the loss corresponding to the varitional form of the BKE
+            including the FTS reweighting factors. 
+            
+            Independent computation is first done on individual MPI process. 
+            First, we compute the following at every 'l'-th MPI process: 
+
+            .. math::
+                L_l = \frac{1}{2 M_l} \sum_{x \in M_l} |\grad q(x)|^2,
+            
+            where :math: $M_l$ is the mini-batch collected by the l-th MPI
+            process. We then collect the computation to compute the main loss as
+
+            .. math::
+                \ell_{main} = \sum_{l=1}^{S-1} L_l z_l)
+            
+            where :math: 'S' is the MPI world size. 
+
+            Note that PyTorch does not track arithmetic operations during MPI
+            collective calls. Thus, the last sum containing L_l z_l is not reflected 
+            in the computational graph tracked by individual MPI process. The 
+            final gradients will be collected in each respective optimizer.
+        """
+        main_loss = torch.zeros(1) 
+        
+        #Compute the first part of the loss
+        main_loss =  0.5*torch.sum(torch.mean(gradients*gradients,dim=0))
+        
+        #renormalize main_loss
+        main_loss *= zl[_rank]
+        dist.all_reduce(main_loss)
+        return main_loss
+
+    def forward(self, gradients, zl):
+        self.main_loss = self.compute_bkeloss(gradients, zl)
         self.bc_loss = self.compute_bc()
         return self.main_loss+self.bc_loss
 
