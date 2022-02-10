@@ -128,6 +128,28 @@ class DimerEXP : public MLSamplerEXP
             //system->DumpXYZBias(dump);
             system->UpdateStates(step);
         };
+
+        void dumpRestart()
+        {
+            //Dump a file we can restart from easily
+            system->DumpRestart();
+        };
+
+        void useRestart()
+        {
+            // Use restart file
+            system->UseRestart();
+            torch_config.requires_grad_(false);
+            //Assume that the torch Tensor is not flattened
+            for(int i=0; i<3; i++) {
+                torch_config[0][i] = system->state[0][i];
+            }
+            // Dimer 1
+            for(int i=0; i<3; i++) {
+                torch_config[1][i] = system->state[1][i];
+            }
+            torch_config.requires_grad_(true);
+        };
     private:
         //The Dimer simulator 
         //I did shared_ptr so that it can clean up itself during destruction
@@ -252,6 +274,28 @@ class DimerEXPString : public MLSamplerEXPString
             //system->DumpXYZBias(dump);
             system->UpdateStates(step);
         };
+
+        void dumpRestart()
+        {
+            //Dump a file we can restart from easily
+            system->DumpRestart();
+        };
+
+        void useRestart()
+        {
+            // Use restart file
+            system->UseRestart();
+            torch_config.requires_grad_(false);
+            //Assume that the torch Tensor is not flattened
+            for(int i=0; i<3; i++) {
+                torch_config[0][i] = system->state[0][i];
+            }
+            // Dimer 1
+            for(int i=0; i<3; i++) {
+                torch_config[1][i] = system->state[1][i];
+            }
+            torch_config.requires_grad_(true);
+        };
     private:
         //The Dimer simulator 
         //I did shared_ptr so that it can clean up itself during destruction
@@ -372,6 +416,28 @@ class DimerFTS : public MLSamplerFTS
             //You can add whatever you want here Clay!
             //system->DumpXYZBias(dump);
             system->UpdateStates(step);
+        };
+
+        void dumpRestart()
+        {
+            //Dump a file we can restart from easily
+            system->DumpRestart();
+        };
+
+        void useRestart()
+        {
+            // Use restart file
+            system->UseRestart();
+            torch_config.requires_grad_(false);
+            //Assume that the torch Tensor is not flattened
+            for(int i=0; i<3; i++) {
+                torch_config[0][i] = system->state[0][i];
+            }
+            // Dimer 1
+            for(int i=0; i<3; i++) {
+                torch_config[1][i] = system->state[1][i];
+            }
+            torch_config.requires_grad_(true);
         };
     private:
         //The Dimer simulator 

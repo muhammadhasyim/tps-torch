@@ -26,8 +26,10 @@ rank = tpstorch._rank
 
 #Import any other thing
 import tqdm, sys
-torch.manual_seed(5070)
-np.random.seed(5070)
+# reload count
+count = int(np.genfromtxt("count.txt"))
+torch.manual_seed(count)
+np.random.seed(count)
 
 prefix = 'simple'
 
@@ -58,7 +60,7 @@ committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3,
 #Initialize the string for FTS method
 ftslayer = FTSLayer(react_config=start[:2].flatten(),prod_config=end[:2].flatten(),num_nodes=world_size,boxsize=box[0],kappa_perpend=kappa_perp, kappa_parallel=kappa_par, num_particles=2).to('cpu')
 #Load the pre-initialized neural network and string
-committor.load_state_dict(torch.load("initial_1hl_nn", map_location=torch.device('cpu')))
+committor.load_state_dict(torch.load("simple_params", map_location=torch.device('cpu')))
 ftslayer.load_state_dict(torch.load("../test_string_config"))
 ftslayer.set_tangent()
 
@@ -67,11 +69,13 @@ batch_size = 8
 period = 25
 dimer_sim_bc = DimerFTSUS(  param="param_bc",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = 0.0, save_config=False, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
 dimer_sim = DimerFTSUS( param="param",config=initial_config.clone().detach(), rank=rank, beta=1/kT, kappa = kappa_perp, save_config=True, mpi_group = mpi_group, ftslayer=ftslayer,output_time=batch_size*period)
+dimer_sim.useRestart()
 
 #Construct datarunner
 datarunner = EXPReweightStringSimulation(dimer_sim, committor, period=period, batch_size=batch_size, dimN=Np*3)
 #Construct optimizers
 optimizer = ParallelAdam(committor.parameters(), lr=1e-4)
+optimizer.load_state_dict(torch.load("optimizer_params"))
 
 #Initialize main loss function and optimizers
 #Optimizer, doing EXP Reweighting. We can do SGD (integral control), or Heavy-Ball (PID control)
@@ -81,19 +85,19 @@ loss = BKELossEXP(  bc_sampler = dimer_sim_bc,
                     lambda_B = 1e4,
                     start_react = start,
                     start_prod = end,
-                    n_bc_samples = 100, 
+                    n_bc_samples = 0, 
                     bc_period = 100,
                     batch_size_bc = 0.5,
                     )
 
 loss_io = []
 if rank == 0:
-    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'a')
 
 # Save reactant, product configurations
-torch.save(loss.react_configs, "react_configs_"+str(rank+1)+".pt")
-torch.save(loss.prod_configs, "prod_configs_"+str(rank+1)+".pt")
-torch.save(loss.n_bc_samples, "n_bc_samples_"+str(rank+1)+".pt")
+loss.react_configs = torch.load("react_configs_"+str(rank+1)+".pt")
+loss.prod_configs = torch.load("prod_configs_"+str(rank+1)+".pt")
+loss.n_bc_samples = torch.load("n_bc_samples_"+str(rank+1)+".pt")
 
 #Training loop
 for epoch in range(1):
@@ -102,7 +106,7 @@ for epoch in range(1):
     time_max = 9.0*60
     time_out = True
     #for i in range(count,count+100):#20000)):
-    i = 0
+    i = count
     while(time_out):
         # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()

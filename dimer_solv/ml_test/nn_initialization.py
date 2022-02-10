@@ -8,7 +8,8 @@ import torch.distributed as dist
 import torch.nn as nn
 
 #Import necessarry tools from tpstorch 
-from committor_nn import CommittorNetDR, CommittorNetBP
+from dimer_ftsus import FTSLayerUSCustom as FTSLayer
+from committor_nn import CommittorNetDR, CommittorNetBP, SchNet
 #from tpstorch.ml.data import FTSSimulation, EXPReweightStringSimulation
 from tpstorch.ml.optim import ParallelSGD, ParallelAdam#, FTSImplicitUpdate, FTSUpdate
 #from tpstorch.ml.nn import BKELossFTS, BKELossEXP, FTSCommittorLoss, FTSLayer
@@ -32,15 +33,22 @@ def initializer(s):
 
 #Initialization
 r0 = 2**(1/6.0)
-width =  0.5*r0
+width =  0.25
 
 #Reactant
-dist_init_start = r0
+dist_init = 0.98
+start = torch.zeros((2,3))
+start[0][2] = -0.5*dist_init
+start[1][2] = 0.5*dist_init
+
 #Product state
-dist_init_end = r0+2*width
+dist_init = 1.75
+end = torch.zeros((2,3))
+end[0][2] = -0.5*dist_init
+end[1][2] = 0.5*dist_init
 
 #scale down/up the distance of one of the particle dimer
-box = [14.736125994561544, 14.736125994561544, 14.736125994561544]
+box = [8.617738760127533, 8.617738760127533, 8.617738760127533]
 def CubicLattice(dist_init):
     state = torch.zeros(Np, 3);
     num_spacing = np.ceil(Np**(1/3.0))
@@ -80,11 +88,12 @@ start = CubicLattice(dist_init_start)
 end = CubicLattice(dist_init_end)
 initial_config = initializer(rank/(world_size-1))
 
-committor = CommittorNetBP(num_nodes=200, boxsize=box[0], Np=32,rc=2.5,sigma=1.0).to('cpu')
+committor = SchNet(hidden_channels = 64, num_filters = 64, num_interactions = 3, num_gaussians = 50, cutoff = box[0], max_num_neighbors = 31, boxsize=box[0], Np=32, dim=3).to('cpu')
+ftslayer = FTSLayer(react_config=start.flatten(),prod_config=end.flatten(),num_nodes=world_size,boxsize=10.0,kappa_perpend=0.0,kappa_parallel=0.0).to('cpu')
 
 #Initial Training Loss
 initloss = nn.MSELoss()
-initoptimizer = ParallelAdam(committor.parameters(), lr=1.0e-2)#,momentum=0.95, nesterov=True)
+initoptimizer = ParallelAdam(committor.parameters(), lr=1.0e-4)#,momentum=0.95, nesterov=True)
 #initoptimizer = ParallelSGD(committor.parameters(), lr=1e-2,momentum=0.95, nesterov=True)
 
 #from torchsummary import summary
@@ -95,12 +104,17 @@ tolerance = 1e-3
 tolerance = 1e-4
 #batch_sizes = [64]
 #for size in batch_sizes:
-for i in tqdm.tqdm(range(10**5)):
+loss_io = []
+if rank == 0:
+    loss_io = open("{}_statistic_{}.txt".format(prefix,rank+1),'w')
+if rank == 0:
+    print("Before training")
+for i in range(10**7):
     # zero the parameter gradients
     initoptimizer.zero_grad()
     
     # forward + backward + optimize
-    q_vals = committor(initial_config.view(-1,Np))
+    q_vals = committor(initial_config.view(-1,3))
     targets = torch.ones_like(q_vals)*rank/(dist.get_world_size()-1)
     cost = initloss(q_vals, targets)#,committor,config,cx)
     cost.backward()
@@ -109,13 +123,16 @@ for i in tqdm.tqdm(range(10**5)):
     initoptimizer.step()
     with torch.no_grad():
         dist.all_reduce(cost)
-        if i % 10 == 0 and rank == 0:
-            print(i,cost.item() / world_size)#, committor(ftslayer.string[-1]))
+        #if i % 10 == 0 and rank == 0:
+        #    print(i,cost.item() / world_size, committor(ftslayer.string[-1]))
         #    torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
-            torch.save(committor.state_dict(), "initial_1hl_nn_bp")#_{}".format(size))#prefix,rank+1))
+        if rank == 0:
+            loss_io.write("Step {:d} Loss {:.5E}\n".format(i,cost.item()))
+            loss_io.flush()
         if cost.item() / world_size < tolerance:
             if rank == 0:
-                torch.save(committor.state_dict(), "initial_1hl_nn_bp")#_{}".format(size))#prefix,rank+1))
+                torch.save(committor.state_dict(), "initial_1hl_nn")#_{}".format(size))#prefix,rank+1))
+                torch.save(ftslayer.state_dict(), "test_string_config")#_{}".format(size))#prefix,rank+1))
             print("Early Break!")
             break
     committor.zero_grad()

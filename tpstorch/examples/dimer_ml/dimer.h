@@ -59,6 +59,8 @@ class Dimer {
         void DumpStates();
         // Input state
         void UseRestart();
+        // Dump restart
+        void DumpRestart();
         
         // Variables
         // Positions
@@ -70,7 +72,7 @@ class Dimer {
         // Dimer system parameters
         // For the bonded part
         // V(r) = height*(1-(r-r_0-width)**2/width**2)**2
-        // F(r) = -dV(r)/dr = height*(r-r_0-width)*(1-(r-r_0-width)**2/width**2)/width**2
+        // F(r) = -dV(r)/dr = 4*height*(r-r_0-width)*(1-(r-r_0-width)**2/width**2)/width**2
         // For the interaction part with (not implemented) solvent, use WCA interactions for everything
         // but the two particles in a dimer
         float height = 1.0; // controls the barrier distance
@@ -99,10 +101,10 @@ class Dimer {
         vector<float> bond_storage;
         vector<vector<vector<float>>> state_storage;
         string config_filename = "config";
+        string restart_filename = "restart";
         string log_filename = "log";
         ofstream config_file;
         ofstream log_file;
-
 };
 
 #endif
