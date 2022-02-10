@@ -215,7 +215,7 @@ class DimerFTS(MyMLFTSSampler):
     @torch.no_grad() 
     def isReactant(self, x = None):
         r0 = 2**(1/6.0)
-        s = 0.5*r0
+        s = 0.25
         #Compute the pair distance
         if x is None:
             if self.getBondLength() <= r0:
@@ -231,7 +231,7 @@ class DimerFTS(MyMLFTSSampler):
     @torch.no_grad() 
     def isProduct(self,x = None):
         r0 = 2**(1/6.0)
-        s = 0.5*r0
+        s = 0.25
         if x is None:
             if self.getBondLength() >= r0+2*s:
                 return True

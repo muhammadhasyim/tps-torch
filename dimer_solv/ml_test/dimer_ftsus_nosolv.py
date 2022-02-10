@@ -16,6 +16,42 @@ from tpstorch.ml.nn import FTSLayerUS
 #Import any other thing
 import tqdm, sys
 
+#This function only assumes that the string consists of the dimer without solvent particles
+@torch.no_grad()
+def dimer_reorient(vec,x,boxsize):
+    Np = 2
+    ##(1) Pre-processing so that dimer is at the center
+    old_x = x.view(2,3).clone()
+
+    #Compute the pair distance
+    dx = (old_x[0]-old_x[1])
+    dx = dx-torch.round(dx/boxsize)*boxsize
+    
+    #Re-compute one of the coordinates and shift to origin
+    old_x[0] = dx+old_x[1] 
+    x_com = 0.5*(old_x[0]+old_x[1])
+    
+    new_vec = vec.view(Np,3).clone()
+    #Compute the pair distance
+    ds = (new_vec[0]-new_vec[1])
+    ds = ds-torch.round(ds/boxsize)*boxsize
+      
+    #Re-compute one of the coordinates and shift to origin
+    new_vec[0] = ds+new_vec[1]
+    s_com = 0.5*(new_vec[0]+new_vec[1])
+    for i in range(Np):
+        old_x[i] -= x_com
+        new_vec[i] -= s_com
+        old_x[i] -= torch.round(old_x[i]/boxsize)*boxsize 
+        new_vec[i] -= torch.round(new_vec[i]/boxsize)*boxsize 
+   
+    ##(2) Rotate the system using Kabsch algorithm
+    weights = np.ones(Np)
+    rotate,rmsd = scipy.spatial.transform.Rotation.align_vectors(new_vec.numpy(),old_x.numpy(), weights=weights)
+    for i in range(Np):
+        old_x[i] = torch.tensor(rotate.apply(old_x[i].numpy())) 
+        old_x[i] -= torch.round(old_x[i]/boxsize)*boxsize 
+    return old_x.flatten()
 
 class FTSLayerUSCustom(FTSLayerUS):
     r""" A linear layer, where the paramaters correspond to the string obtained by the 
@@ -237,7 +273,7 @@ class DimerFTSUS(MyMLEXPStringSampler):
     @torch.no_grad() 
     def isReactant(self, x = None):
         r0 = 2**(1/6.0)
-        s = 0.5*r0
+        s = 0.25
         #Compute the pair distance
         if x is None:
             if self.getBondLength() <= r0:
@@ -253,7 +289,7 @@ class DimerFTSUS(MyMLEXPStringSampler):
     @torch.no_grad() 
     def isProduct(self,x = None):
         r0 = 2**(1/6.0)
-        s = 0.5*r0
+        s = 0.25
         if x is None:
             if self.getBondLength() >= r0+2*s:
                 return True

@@ -1,5 +1,7 @@
 import sys
 sys.path.append("..")
+import time
+t0 = time.time()
 
 #Import necessarry tools from torch
 import tpstorch
@@ -29,10 +31,10 @@ prefix = 'simple'
 
 #(1) Initialization
 r0 = 2**(1/6.0)
-width =  0.5*r0
+width =  0.25
 Np = 30+2
 box = [8.617738760127533, 8.617738760127533, 8.617738760127533]
-kappa= 600
+kappa= 100
 kT = 1.0
 
 initial_config = np.genfromtxt("../restart/config_"+str(rank)+".xyz", usecols=(1,2,3))
@@ -102,7 +104,11 @@ torch.save(loss.n_bc_samples, "n_bc_samples_"+str(rank+1)+".pt")
 for epoch in range(1):
     if rank == 0:
         print("epoch: [{}]".format(epoch+1))
-    for i in range(100):
+    time_max = 9.0*60
+    time_out = True
+    #for i in range(count,count+100):#20000)):
+    i = 0
+    while(time_out):
         # get data and reweighting factors
         config, grad_xs, invc, fwd_wl, bwrd_wl = datarunner.runSimulation()
         dimer_sim.dumpRestart()
@@ -132,3 +138,10 @@ for epoch in range(1):
                 np.savetxt("count.txt", np.array((i+1,)))
                 loss_io.write('{:d} {:.5E} {:.5E}\n'.format(i+1,main_loss.item(),bc_loss.item()))
                 loss_io.flush()
+            i = i+1
+            t1 = time.time()
+            time_diff = t1-t0
+            time_diff = torch.tensor(time_diff)
+            dist.all_reduce(time_diff,op=dist.ReduceOp.MAX)
+            if time_diff > time_max:
+                time_out = False
