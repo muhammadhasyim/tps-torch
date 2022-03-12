@@ -1,5 +1,7 @@
 import sys
 sys.path.append("..")
+import time
+t0 = time.time()
 
 #Import necessarry tools from torch
 import tpstorch
@@ -31,7 +33,7 @@ prefix = 'simple'
 
 #(1) Initialization
 r0 = 2**(1/6.0)
-width =  0.5*r0
+width =  0.25
 Np = 30+2
 box = [8.617738760127533, 8.617738760127533, 8.617738760127533]
 kT = 1.0
@@ -85,7 +87,11 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
     for epoch in range(1):
         if rank == 0:
             print("epoch: [{}]".format(epoch+1))
-        for i in range(100):
+        time_max = 9.0*60
+        time_out = True
+        #for i in range(count,count+100):#20000)):
+        i = 0
+        while(time_out):
             # get data and reweighting factors
             configs, grad_xs  = datarunner.runSimulation()
             dimer_sim.dumpRestart()
@@ -109,8 +115,8 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
                 f.write('Lattice=\"10.0 0.0 0.0 0.0 10.0 0.0 0.0 0.0 10.0\" ')
                 f.write('Origin=\"-5.0 -5.0 -5.0\" ')
                 f.write("Properties=type:S:1:pos:R:3:aux1:R:1 \n")
-                f.write("2 {} {} {} {} \n".format(string_temp[0,0],string_temp[0,1], string_temp[0,2],0.5*r0))
-                f.write("2 {} {} {} {} \n".format(string_temp[1,0],string_temp[1,1], string_temp[1,2],0.5*r0))
+                f.write("2 {} {} {} {} \n".format(string_temp[0,0],string_temp[0,1], string_temp[0,2],0.25))
+                f.write("2 {} {} {} {} \n".format(string_temp[1,0],string_temp[1,1], string_temp[1,2],0.25))
                 f.flush()
                 g.write("{} {} \n".format((i+1)*period,torch.norm(string_temp[0]-string_temp[1])))
                 g.flush()
@@ -130,3 +136,10 @@ with open("string_{}_config.xyz".format(rank),"w") as f, open("string_{}_log.txt
                     np.savetxt("count.txt", np.array((i+1,)))
                     loss_io.write('{:d} {:.5E} {:.5E} \n'.format(i+1,main_loss.item(),bc_loss.item()))
                     loss_io.flush()
+                i = i+1
+                t1 = time.time()
+                time_diff = t1-t0
+                time_diff = torch.tensor(time_diff)
+                dist.all_reduce(time_diff,op=dist.ReduceOp.MAX)
+                if time_diff > time_max:
+                    time_out = False
