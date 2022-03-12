@@ -23,13 +23,13 @@ class MLSamplerFTS
         double steps; 
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
-        MLSamplerFTS(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            :   torch_config(config), m_mpi_group(mpi_group)
+        MLSamplerFTS(const torch::Tensor& config, const int world_size, const int rank)
+            :   torch_config(config), world_size(world_size), rank(rank)
         {
             //Turn on the requires grad by default
             torch_config.requires_grad_();
-            distance_sq_list = torch::linspace(0,1,mpi_group->getSize()+1);
-            rejection_count = torch::zeros(mpi_group->getSize());
+            distance_sq_list = torch::linspace(0,1,world_size+1);
+            rejection_count = torch::zeros(world_size);
             steps = 0.0;
 
         };
@@ -118,7 +118,8 @@ class MLSamplerFTS
         };
     protected:
         //A pointer for the MPI process group used in the current simulation
-        std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
+        const int world_size;
+        const int rank;
 };
 
 
@@ -153,9 +154,9 @@ class MLSamplerEXP
         
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
-        MLSamplerEXP(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+        MLSamplerEXP(const torch::Tensor& config, const int world_size, const int rank)
             :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
-                qvals(torch::linspace(0,1,mpi_group->getSize())), invkT(0), kappa(0), m_mpi_group(mpi_group)
+                qvals(torch::linspace(0,1,world_size)), invkT(0), kappa(0), world_size(world_size), rank(rank)
         {
             //Turn on the requires grad by default
             torch_config.requires_grad_();
@@ -214,15 +215,15 @@ class MLSamplerEXP
             torch::Tensor dW;
 
             //For w_{1+1}(x)/w_{l}(x), only compute if your rank is zero to second-to-last
-            if (m_mpi_group->getRank() < m_mpi_group->getSize()-1)
+            if (rank < world_size-1)
             {
-                dW = computeW(committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
+                dW = computeW(committor_val, qvals[rank+1])-computeW(committor_val,qvals[rank]);
                 fwd_weightfactor = torch::exp(-invkT*dW);
             }
             //For w_{1-1}(x)/w_{l}(x), only compute if your rank is one to last
-            if (m_mpi_group->getRank() > 0)
+            if (rank > 0)
             {
-                dW = computeW(committor_val,qvals[m_mpi_group->getRank()-1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
+                dW = computeW(committor_val,qvals[rank-1])-computeW(committor_val,qvals[rank]);
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
@@ -273,7 +274,8 @@ class MLSamplerEXP
         };
     protected:
         //A pointer for the MPI process group used in the current simulation
-        std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
+        const int world_size;
+        const int rank;
 };
 
 class MLSamplerEXPString
@@ -310,14 +312,14 @@ class MLSamplerEXPString
         double steps; 
         
         //Default constructor just turn on the grad. Depending on the datatype, the best option is to use from_blob
-        MLSamplerEXPString(const torch::Tensor& config, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
+        MLSamplerEXPString(const torch::Tensor& config, const int world_size, const int rank)
             :   torch_config(config), fwd_weightfactor(torch::ones(1)), bwrd_weightfactor(torch::ones(1)), reciprocal_normconstant(torch::ones(1)),
-                invkT(0), kappa(0), steps(0), m_mpi_group(mpi_group)
+                invkT(0), kappa(0), steps(0), world_size(world_size), rank(rank)
         {
             //Turn on the requires grad by default
             torch_config.requires_grad_();
-            distance_sq_list = torch::linspace(0,1,mpi_group->getSize());
-            rejection_count = torch::zeros(mpi_group->getSize());
+            distance_sq_list = torch::linspace(0,1,world_size);
+            rejection_count = torch::zeros(world_size);
         };
         virtual ~MLSamplerEXPString(){};
         
@@ -384,7 +386,7 @@ class MLSamplerEXPString
         {
             torch::NoGradGuard no_grad_guard;
             torch::Tensor val = torch::zeros_like(reciprocal_normconstant);
-            for (int i = 0; i < m_mpi_group->getSize(); i++)
+            for (int i = 0; i < world_size; i++)
             {
                 val += torch::exp(-invkT*computeW(i));
             }
@@ -399,15 +401,15 @@ class MLSamplerEXPString
             torch::Tensor dW;
 
             //For w_{1+1}(x)/w_{l}(x), only compute if your rank is zero to second-to-last
-            if (m_mpi_group->getRank() < m_mpi_group->getSize()-1)
+            if (rank < world_size-1)
             {
-                dW = computeW(m_mpi_group->getRank()+1)-computeW(m_mpi_group->getRank());//;//committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
+                dW = computeW(rank+1)-computeW(rank);//;//committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
                 fwd_weightfactor = torch::exp(-invkT*dW);
             }
             //For w_{1-1}(x)/w_{l}(x), only compute if your rank is one to last
-            if (m_mpi_group->getRank() > 0)
+            if (rank > 0)
             {
-                dW = computeW(m_mpi_group->getRank()-1)-computeW(m_mpi_group->getRank());
+                dW = computeW(rank-1)-computeW(rank);
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }
@@ -457,7 +459,8 @@ class MLSamplerEXPString
         };
     protected:
         //A pointer for the MPI process group used in the current simulation
-        std::shared_ptr<c10d::ProcessGroupMPI> m_mpi_group;
+        const int world_size;
+        const int rank;
 };
 
 class MLSamplerEMUSString

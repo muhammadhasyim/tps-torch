@@ -24,6 +24,8 @@ void export_DimerFTS(py::module& m)
     .def("dumpRestart", &DimerFTS::dumpRestart)
     .def("useRestart", &DimerFTS::useRestart)
     .def_readwrite("torch_config", &DimerFTS::torch_config)
+    .def_readonly("world_size", &DimerFTS::world_size)
+    .def_readonly("rank", &DimerFTS::rank)
     ;
 };
 
@@ -59,6 +61,8 @@ void export_DimerEXP(py::module& m)
     .def_readwrite("qvals", &DimerEXP::qvals)
     .def_readwrite("invkT", &DimerEXP::invkT)
     .def_readwrite("kappa", &DimerEXP::kappa)
+    .def_readonly("world_size", &DimerEXP::world_size)
+    .def_readonly("rank", &DimerEXP::rank)
     ;
 };
 
@@ -94,6 +98,8 @@ void export_DimerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &DimerEXPString::distance_sq_list)
     .def_readwrite("invkT", &DimerEXPString::invkT)
     .def_readwrite("kappa", &DimerEXPString::kappa)
+    .def_readonly("world_size", &DimerEXPString::world_size)
+    .def_readonly("rank", &DimerEXPString::rank)
     ;
 };
 

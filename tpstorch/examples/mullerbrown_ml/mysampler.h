@@ -14,8 +14,8 @@ class MySamplerFTS : public MLSamplerFTS
     public:
         /* MH: These things were already defined in MLSamplerEXP, so you can comment it out
         */
-        MySamplerFTS(std::string param_file, const torch::Tensor& config, int rank, int dump, double in_invkT, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerFTS(config, mpi_group), system(new MullerBrown())
+        MySamplerFTS(std::string param_file, const torch::Tensor& config, const int rank, int dump, double in_invkT, const int world_size)
+            : MLSamplerFTS(config, world_size, rank), system(new MullerBrown())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);
@@ -95,8 +95,8 @@ class MySamplerFTS : public MLSamplerFTS
 class MySamplerEXPString : public MLSamplerEXPString
 {
     public:
-        MySamplerEXPString(std::string param_file, const torch::Tensor& config, int rank, int dump, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerEXPString(config, mpi_group), system(new MullerBrown())
+        MySamplerEXPString(std::string param_file, const torch::Tensor& config, const int rank, int dump, double in_invkT, double in_kappa, const int world_size)
+            : MLSamplerEXPString(config, world_size, rank), system(new MullerBrown())
         {
             //Load parameters during construction
             invkT = in_invkT;
@@ -182,8 +182,8 @@ class MySamplerEXPString : public MLSamplerEXPString
 class MySampler : public MLSamplerEXP
 {
     public:
-        MySampler(std::string param_file, const torch::Tensor& config, int rank, int dump, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerEXP(config, mpi_group), system(new MullerBrown())
+        MySampler(std::string param_file, const torch::Tensor& config, const int rank, int dump, double in_invkT, double in_kappa, const int world_size)
+            : MLSamplerEXP(config, world_size, rank), system(new MullerBrown())
         {
             //Load parameters during construction
             invkT = in_invkT;
@@ -198,7 +198,7 @@ class MySampler : public MLSamplerEXP
             system->temp = 1.0/invkT;
             system->k_umb = kappa;
             float* qvals_ = qvals.data_ptr<float>();
-            system->committor_umb = qvals_[m_mpi_group->getRank()];
+            system->committor_umb = qvals_[rank];
             torch_config.requires_grad_();
         };
         ~MySampler(){}; 
@@ -223,15 +223,15 @@ class MySampler : public MLSamplerEXP
             torch::Tensor dW;
 
             //For w_{1+1}(x)/w_{l}(x), only compute if your rank is zero to second-to-last
-            if (m_mpi_group->getRank() < m_mpi_group->getSize()-1)
+            if (rank < world_size-1)
             {
-                dW = computeW(committor_val, qvals[m_mpi_group->getRank()+1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
+                dW = computeW(committor_val, qvals[rank+1])-computeW(committor_val,qvals[rank]);
                 fwd_weightfactor = torch::exp(-invkT*dW);
             }
             //For w_{1-1}(x)/w_{l}(x), only compute if your rank is one to last
-            if (m_mpi_group->getRank() > 0)
+            if (rank > 0)
             {
-                dW = computeW(committor_val,qvals[m_mpi_group->getRank()-1])-computeW(committor_val,qvals[m_mpi_group->getRank()]);
+                dW = computeW(committor_val,qvals[rank-1])-computeW(committor_val,qvals[rank]);
                 bwrd_weightfactor = torch::exp(-invkT*dW);
             }
         }

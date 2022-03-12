@@ -497,7 +497,7 @@ void export_MLSamplerEXP(py::module& m)
 {
     //Expose everything to the Python side!
     py::class_<MLSamplerEXP, PyMLSamplerEXP, std::shared_ptr<MLSamplerEXP> > (m, "MLSamplerEXP", py::dynamic_attr())
-    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< torch::Tensor, int, int >())
     .def("step", &MLSamplerEXP::step)
     .def("step_unbiased", &MLSamplerEXP::step_unbiased)
     .def("step_bc", &MLSamplerEXP::step_bc)
@@ -516,6 +516,8 @@ void export_MLSamplerEXP(py::module& m)
     .def_readwrite("qvals", &MLSamplerEXP::qvals)
     .def_readwrite("invkT", &MLSamplerEXP::invkT)
     .def_readwrite("kappa", &MLSamplerEXP::kappa)
+    .def_readonly("world_size", &MLSamplerEXP::world_size)
+    .def_readonly("rank", &MLSamplerEXP::rank)
     ;
 };
 
@@ -523,7 +525,7 @@ void export_MLSamplerFTS(py::module& m)
 {
     //Expose everything to the Python side!
     py::class_<MLSamplerFTS, PyMLSamplerFTS, std::shared_ptr<MLSamplerFTS> > (m, "MLSamplerFTS", py::dynamic_attr())
-    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< torch::Tensor, int, int >())
     .def("step", &MLSamplerFTS::step)
     .def("step_unbiased", &MLSamplerFTS::step_unbiased)
     .def("step_bc", &MLSamplerFTS::step_bc)
@@ -538,6 +540,8 @@ void export_MLSamplerFTS(py::module& m)
     .def_readwrite("steps", &MLSamplerFTS::steps)
     .def_readwrite("distance_sq_list", &MLSamplerFTS::distance_sq_list)
     .def_readwrite("rejection_count", &MLSamplerFTS::rejection_count)
+    .def_readonly("world_size", &MLSamplerFTS::world_size)
+    .def_readonly("rank", &MLSamplerFTS::rank)
     ;
 };
 
@@ -545,7 +549,7 @@ void export_MLSamplerEXPString(py::module& m)
 {
     //Expose everything to the Python side!
     py::class_<MLSamplerEXPString, PyMLSamplerEXPString, std::shared_ptr<MLSamplerEXPString> > (m, "MLSamplerEXPString", py::dynamic_attr())
-    .def(py::init< torch::Tensor, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< torch::Tensor, int, int >())
     .def("step", &MLSamplerEXPString::step)
     .def("step_unbiased", &MLSamplerEXPString::step_unbiased)
     .def("step_bc", &MLSamplerEXPString::step_bc)
@@ -568,6 +572,8 @@ void export_MLSamplerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &MLSamplerEXPString::distance_sq_list)
     .def_readwrite("invkT", &MLSamplerEXPString::invkT)
     .def_readwrite("kappa", &MLSamplerEXPString::kappa)
+    .def_readonly("world_size", &MLSamplerEXPString::world_size)
+    .def_readonly("rank", &MLSamplerEXPString::rank)
     ;
 };
 

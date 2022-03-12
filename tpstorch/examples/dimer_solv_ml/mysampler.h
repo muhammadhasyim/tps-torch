@@ -11,8 +11,8 @@
 class DimerSolvEXP : public MLSamplerEXP
 {
     public:
-        DimerSolvEXP(std::string param_file, const torch::Tensor& config, int rank, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerEXP(config, mpi_group), system(new Dimer())
+        DimerSolvEXP(std::string param_file, const torch::Tensor& config, const int rank, double in_invkT, double in_kappa, const int world_size)
+            : MLSamplerEXP(config, world_size, rank), system(new Dimer())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);
@@ -35,7 +35,7 @@ class DimerSolvEXP : public MLSamplerEXP
             system->temp = 1.0/in_invkT;
             system->k_umb = in_kappa;
             float* qvals_ = qvals.data_ptr<float>();
-            system->committor_umb = qvals_[m_mpi_group->getRank()];
+            system->committor_umb = qvals_[rank];
             torch_config.requires_grad_();
         }
         ~DimerSolvEXP(){}; 
@@ -149,8 +149,8 @@ class DimerSolvEXP : public MLSamplerEXP
 class DimerSolvEXPString : public MLSamplerEXPString
 {
     public:
-        DimerSolvEXPString(std::string param_file, const torch::Tensor& config, int rank, double in_invkT, double in_kappa, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerEXPString(config, mpi_group), system(new Dimer())
+        DimerSolvEXPString(std::string param_file, const torch::Tensor& config, const int rank, double in_invkT, double in_kappa, const int world_size)
+            : MLSamplerEXPString(config, world_size, rank), system(new Dimer())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);
@@ -289,8 +289,8 @@ class DimerSolvFTS : public MLSamplerFTS
     public:
         /* MH: These things were already defined in MLSamplerEXP, so you can comment it out
         */
-        DimerSolvFTS(std::string param_file, const torch::Tensor& config, int rank, double in_invkT, const std::shared_ptr<c10d::ProcessGroupMPI>& mpi_group)
-            : MLSamplerFTS(config, mpi_group), system(new Dimer())
+        DimerSolvFTS(std::string param_file, const torch::Tensor& config, const int rank, double in_invkT, const int world_size)
+            : MLSamplerFTS(config, world_size, rank), system(new Dimer())
         {
             //Load parameters during construction
             system->GetParams(param_file,rank);

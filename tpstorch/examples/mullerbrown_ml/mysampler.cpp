@@ -9,7 +9,7 @@ void export_MySampler(py::module& m)
     //it can't find the implementation of MLSamplerEXP
     //py::module_::import("tpstorch.ml._ml");
     py::class_<MySampler, MLSamplerEXP, std::shared_ptr<MySampler> > (m, "MySampler")
-    .def(py::init< std::string, torch::Tensor, int, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, int, double, double, int >())
     .def("step", &MySampler::step)
     .def("step_unbiased", &MySampler::step_unbiased)
     .def("step_bc", &MySampler::step_bc)
@@ -32,6 +32,8 @@ void export_MySampler(py::module& m)
     .def_readwrite("qvals", &MySampler::qvals)
     .def_readwrite("invkT", &MySampler::invkT)
     .def_readwrite("kappa", &MySampler::kappa)
+    .def_readonly("world_size", &MySampler::world_size)
+    .def_readonly("rank", &MySampler::rank)
     ;
 };
 
@@ -42,7 +44,7 @@ void export_MySamplerEXPString(py::module& m)
     //it can't find the implementation of MLSamplerEXPString
     //py::module_::import("tpstorch.ml._ml");
     py::class_<MySamplerEXPString, MLSamplerEXPString, std::shared_ptr<MySamplerEXPString> > (m, "MySamplerEXPString")
-    .def(py::init< std::string, torch::Tensor, int, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, int, double, double, int >())
     .def("step", &MySamplerEXPString::step)
     .def("step_unbiased", &MySamplerEXPString::step_unbiased)
     .def("step_bc", &MySamplerEXPString::step_bc)
@@ -67,6 +69,8 @@ void export_MySamplerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &MySamplerEXPString::distance_sq_list)
     .def_readwrite("invkT", &MySamplerEXPString::invkT)
     .def_readwrite("kappa", &MySamplerEXPString::kappa)
+    .def_readonly("world_size", &MySamplerEXPString::world_size)
+    .def_readonly("rank", &MySamplerEXPString::rank)
     ;
 };
 
@@ -77,7 +81,7 @@ void export_MySamplerFTS(py::module& m)
     //it can't find the implementation of MLSamplerEXP
     //py::module_::import("tpstorch.ml._ml");
     py::class_<MySamplerFTS, MLSamplerFTS, std::shared_ptr<MySamplerFTS> > (m, "MySamplerFTS")
-    .def(py::init< std::string, torch::Tensor, int, int, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, int, double, int >())
     .def("step", &MySamplerFTS::step)
     .def("step_unbiased", &MySamplerFTS::step_unbiased)
     .def("step_bc", &MySamplerFTS::step_bc)
@@ -92,6 +96,8 @@ void export_MySamplerFTS(py::module& m)
     .def("getConfig", &MySamplerFTS::getConfig)
     .def("dumpConfig", &MySamplerFTS::dumpConfig)
     .def_readwrite("torch_config", &MySamplerFTS::torch_config)
+    .def_readonly("world_size", &MySamplerFTS::world_size)
+    .def_readonly("rank", &MySamplerFTS::rank)
     ;
 };
 
