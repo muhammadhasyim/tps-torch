@@ -24,8 +24,6 @@ void export_DimerSolvFTS(py::module& m)
     .def("dumpRestart", &DimerSolvFTS::dumpRestart)
     .def("useRestart", &DimerSolvFTS::useRestart)
     .def_readwrite("torch_config", &DimerSolvFTS::torch_config)
-    .def_readonly("world_size", &DimerSolvFTS::world_size)
-    .def_readonly("rank", &DimerSolvFTS::rank)
     ;
 };
 
@@ -61,8 +59,6 @@ void export_DimerSolvEXP(py::module& m)
     .def_readwrite("qvals", &DimerSolvEXP::qvals)
     .def_readwrite("invkT", &DimerSolvEXP::invkT)
     .def_readwrite("kappa", &DimerSolvEXP::kappa)
-    .def_readonly("world_size", &DimerSolvEXP::world_size)
-    .def_readonly("rank", &DimerSolvEXP::rank)
     ;
 };
 
@@ -98,8 +94,6 @@ void export_DimerSolvEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &DimerSolvEXPString::distance_sq_list)
     .def_readwrite("invkT", &DimerSolvEXPString::invkT)
     .def_readwrite("kappa", &DimerSolvEXPString::kappa)
-    .def_readonly("world_size", &DimerSolvEXPString::world_size)
-    .def_readonly("rank", &DimerSolvEXPString::rank)
     ;
 };
 

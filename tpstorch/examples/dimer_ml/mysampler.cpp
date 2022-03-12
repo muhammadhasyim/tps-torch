@@ -9,7 +9,7 @@ void export_DimerFTS(py::module& m)
     //it can't find the implementation of MLSamplerEXP
     //py::module_::import("tpstorch.ml._ml");
     py::class_<DimerFTS, MLSamplerFTS, std::shared_ptr<DimerFTS> > (m, "DimerFTS")
-    .def(py::init< std::string, torch::Tensor, int, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, double, int >())
     .def("step", &DimerFTS::step)
     .def("step_unbiased", &DimerFTS::step_unbiased)
     .def("step_bc", &DimerFTS::step_bc)
@@ -24,8 +24,6 @@ void export_DimerFTS(py::module& m)
     .def("dumpRestart", &DimerFTS::dumpRestart)
     .def("useRestart", &DimerFTS::useRestart)
     .def_readwrite("torch_config", &DimerFTS::torch_config)
-    .def_readonly("world_size", &DimerFTS::world_size)
-    .def_readonly("rank", &DimerFTS::rank)
     ;
 };
 
@@ -36,7 +34,7 @@ void export_DimerEXP(py::module& m)
     //it can't find the implementation of MLSamplerEXP
     //py::module_::import("tpstorch.ml._ml");
     py::class_<DimerEXP, MLSamplerEXP, std::shared_ptr<DimerEXP> > (m, "DimerEXP")
-    .def(py::init< std::string, torch::Tensor, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, double, double, int >())
     .def("step", &DimerEXP::step)
     .def("step_unbiased", &DimerEXP::step_unbiased)
     .def("step_bc", &DimerEXP::step_bc)
@@ -61,8 +59,6 @@ void export_DimerEXP(py::module& m)
     .def_readwrite("qvals", &DimerEXP::qvals)
     .def_readwrite("invkT", &DimerEXP::invkT)
     .def_readwrite("kappa", &DimerEXP::kappa)
-    .def_readonly("world_size", &DimerEXP::world_size)
-    .def_readonly("rank", &DimerEXP::rank)
     ;
 };
 
@@ -73,7 +69,7 @@ void export_DimerEXPString(py::module& m)
     //it can't find the implementation of MLSamplerEXPString
     //py::module_::import("tpstorch.ml._ml");
     py::class_<DimerEXPString, MLSamplerEXPString, std::shared_ptr<DimerEXPString> > (m, "DimerEXPString")
-    .def(py::init< std::string, torch::Tensor, int, double, double, std::shared_ptr<c10d::ProcessGroupMPI> >())
+    .def(py::init< std::string, torch::Tensor, int, double, double, int >())
     .def("step", &DimerEXPString::step)
     .def("step_unbiased", &DimerEXPString::step_unbiased)
     .def("step_bc", &DimerEXPString::step_bc)
@@ -98,8 +94,6 @@ void export_DimerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &DimerEXPString::distance_sq_list)
     .def_readwrite("invkT", &DimerEXPString::invkT)
     .def_readwrite("kappa", &DimerEXPString::kappa)
-    .def_readonly("world_size", &DimerEXPString::world_size)
-    .def_readonly("rank", &DimerEXPString::rank)
     ;
 };
 

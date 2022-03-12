@@ -516,8 +516,6 @@ void export_MLSamplerEXP(py::module& m)
     .def_readwrite("qvals", &MLSamplerEXP::qvals)
     .def_readwrite("invkT", &MLSamplerEXP::invkT)
     .def_readwrite("kappa", &MLSamplerEXP::kappa)
-    .def_readonly("world_size", &MLSamplerEXP::world_size)
-    .def_readonly("rank", &MLSamplerEXP::rank)
     ;
 };
 
@@ -540,8 +538,6 @@ void export_MLSamplerFTS(py::module& m)
     .def_readwrite("steps", &MLSamplerFTS::steps)
     .def_readwrite("distance_sq_list", &MLSamplerFTS::distance_sq_list)
     .def_readwrite("rejection_count", &MLSamplerFTS::rejection_count)
-    .def_readonly("world_size", &MLSamplerFTS::world_size)
-    .def_readonly("rank", &MLSamplerFTS::rank)
     ;
 };
 
@@ -572,8 +568,6 @@ void export_MLSamplerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &MLSamplerEXPString::distance_sq_list)
     .def_readwrite("invkT", &MLSamplerEXPString::invkT)
     .def_readwrite("kappa", &MLSamplerEXPString::kappa)
-    .def_readonly("world_size", &MLSamplerEXPString::world_size)
-    .def_readonly("rank", &MLSamplerEXPString::rank)
     ;
 };
 

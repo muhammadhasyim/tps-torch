@@ -32,8 +32,6 @@ void export_MySampler(py::module& m)
     .def_readwrite("qvals", &MySampler::qvals)
     .def_readwrite("invkT", &MySampler::invkT)
     .def_readwrite("kappa", &MySampler::kappa)
-    .def_readonly("world_size", &MySampler::world_size)
-    .def_readonly("rank", &MySampler::rank)
     ;
 };
 
@@ -69,8 +67,6 @@ void export_MySamplerEXPString(py::module& m)
     .def_readwrite("distance_sq_list", &MySamplerEXPString::distance_sq_list)
     .def_readwrite("invkT", &MySamplerEXPString::invkT)
     .def_readwrite("kappa", &MySamplerEXPString::kappa)
-    .def_readonly("world_size", &MySamplerEXPString::world_size)
-    .def_readonly("rank", &MySamplerEXPString::rank)
     ;
 };
 
@@ -96,8 +92,6 @@ void export_MySamplerFTS(py::module& m)
     .def("getConfig", &MySamplerFTS::getConfig)
     .def("dumpConfig", &MySamplerFTS::dumpConfig)
     .def_readwrite("torch_config", &MySamplerFTS::torch_config)
-    .def_readonly("world_size", &MySamplerFTS::world_size)
-    .def_readonly("rank", &MySamplerFTS::rank)
     ;
 };
 
