@@ -1,0 +1,220 @@
+%% ****** Start of file aiptemplate.tex ****** %
+%%
+%%   This file is part of the files in the distribution of AIP substyles for REVTeX4.
+%%   Version 4.1 of 9 October 2009.
+%%
+%
+% This is a template for producing documents for use with 
+% the REVTEX 4.1 document class and the AIP substyles.
+% 
+% Copy this file to another name and then work on that file.
+% That way, you always have this original template file to use.
+
+\documentclass[aip,reprint]{revtex4-1}
+%\documentclass[aip,graphicx]{aip/revtex4-1}
+%\documentclass[aip,reprint]{aip/revtex4-1}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{graphicx}
+\usepackage{lipsum}
+\usepackage{comment}
+\usepackage[caption=false]{subfig}
+\usepackage{textcomp}
+\usepackage{soul}           % highlight text \hl{...} and strike \st{...}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{chngcntr}
+\usepackage{enumitem}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hhline}
+\usepackage{amssymb}
+\usepackage{siunitx}
+
+
+\usepackage{euler}
+
+% comment functions
+\newcommand{\michele}[1]{\textcolor{red}{#1}}
+\newcommand{\MP}[1]{\textcolor{red}{#1}}
+\newcommand{\peilin}[1]{\textcolor{blue}{#1}}
+\newcommand{\enrico}[1]{\textcolor{purple}{#1}}
+\newcommand{\change}[1]{#1}
+
+
+% LISTINGS COLORS
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+%DEFINE PAPER TYPE (0=arXiV,1=journal)
+\def\mycmd{1} 
+
+%Shortcut for mathbf
+\let\oldtextbf=\textbf
+\renewcommand*{\textbf}[1]{\ifmmode\mathbf{#1}\else\oldtextbf{#1}\fi}
+\renewcommand*{\phi}[0]{\varphi}
+
+
+%ABBREVIATIONS
+\newcommand{\R}{\bm{R}}
+\newcommand{\s}{\mathbb{s}}
+\newcommand{\X}{\bm{X}}
+\newcommand{\paragraphtitle}[1]{\textsf{\textbf{\small {#1}}}}
+\DeclareMathOperator{\tr}{tr}
+\draft % marks overfull lines with a black rule on the right
+
+% add line numbers for review
+% \usepackage[]{lineno}
+% \setlength\columnsep{25pt}
+% \linenumbers
+
+\begin{document}
+% Use the \preprint command to place your local institutional report number 
+% on the title page in preprint mode.
+% Multiple \preprint commands are allowed.
+%\preprint{}
+
+\title{Everything everywhere all at once: a probability-based enhanced sampling approach to rare events} %Title of paper
+
+% repeat the \author .. \affiliation  etc. as needed
+% \email, \thanks, \homepage, \altaffiliation all apply to the current author.
+% Explanatory text should go in the []'s, 
+% actual e-mail address or url should go in the {}'s for \email and \homepage.
+% Please use the appropriate macro for the type of information
+
+% \affiliation command applies to all authors since the last \affiliation command. 
+% The \affiliation command should follow the other information.
+
+\author{Enrico Trizio}
+%\homepage[]{Your web page}
+%\thanks{}
+%\altaffiliation{}
+\affiliation{$^1$Atomistic Simulations, Italian Institute of Technology, 16156 Genova, Italy}
+
+
+
+% \author{Peilin Kang}
+% %\homepage[]{Your web page}
+% %\thanks{}
+% %\altaffiliation{}
+% \affiliation{Atomistic Simulations, Italian Institute of Technology, 16156 Genova, Italy}
+% \altaffiliation{Enrico Trizio and Peilin Kang equally contributed to this work.}
+
+\author{Peilin Kang$^*$}
+%\homepage[]{Your web page}
+%\thanks{}
+%\altaffiliation{}
+\email[]{peilin.kang@iit.it}
+\affiliation{$^1$Atomistic Simulations, Italian Institute of Technology, 16156 Genova, Italy}
+
+
+\author{Michele Parrinello$^*$}
+\email[]{michele.parrinello@iit.it}
+\affiliation{$^1$Atomistic Simulations, Italian Institute of Technology, 16156 Genova, Italy}
+
+
+
+
+
+
+
+% Collaboration name, if desired (requires use of superscriptaddress option in \documentclass). 
+% \noaffiliation is required (may also be used with the \author command).
+%\collaboration{}
+%\noaffiliation
+
+\date{\today}
+
+\begin{abstract}
+\input{manuscript/abstract}
+\end{abstract}
+
+%\pacs{}% insert suggested PACS numbers in braces on next line
+
+\maketitle %\maketitle must follow title, authors, abstract and \pacs
+
+\input{manuscript/paper}
+
+\section*{Data Availability} \label{sec:code_avail}
+    Training and simulation data and inputs are available on \hyperlink{https://github.com/EnricoTrizio/committor\_2.0}{GitHub}~\cite{trizio2025github} and on \hyperlink{https://zenodo.org/records/15089373}{Zenodo}.~\cite{trizio2025dataset} 
+
+\section*{Code Availability} \label{sec:code_avail}
+    The code for the training of the NN-based committor model alongside didactic tutorials is available through the open-source \texttt{mlcolvar} library~\cite{bonati2023mlcolvar}, which is the preferred way to access the most updated code. To obtain the results reported in the manuscript, version 1.2.2 was used and a frozen version is also available on \hyperlink{https://zenodo.org/records/15089373}{Zenodo}.~\cite{trizio2025dataset}
+    The PLUMED~\cite{tribello2014plumed, plumed2019promoting} interface for the application of the bias is available on \hyperlink{https://github.com/EnricoTrizio/committor\_2.0}{GitHub}~\cite{trizio2025github} and on \hyperlink{https://zenodo.org/records/15089373}{Zenodo}.~\cite{trizio2025dataset}
+
+\begin{acknowledgments}
+    The Authors are grateful to Luigi Bonati, Andrea Rizzi, Jintu Zhang, Umberto Raucci, Alice Triveri, and Francesco Mambretti for the useful discussions and feedback about this manuscript. 
+\end{acknowledgments}
+
+\section*{Authors contributions}
+    All the authors equally contributed to the manuscript by conceptualizing the project, developing the theoretical methodologies, and participating in the writing of the manuscript.
+    Specifically, E.T. and P.K. developed the code for the training of the committor function and conducted the computational simulations.
+
+\section*{Competing interests statement}
+    The authors declare no competing interests.
+
+%\clearpage
+% Create the reference section using BibTeX:
+\section*{References}
+\bibliography{references}
+% \bibliographystyle{plain}
+
+% begin supporting info
+% reset counters for supporting info
+\setcounter{section}{0}
+\renewcommand{\thesection}{S\arabic{section}}
+\setcounter{equation}{0}
+\renewcommand{\theequation}{S\arabic{equation}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{S\arabic{table}}
+    
+\clearpage
+\onecolumngrid
+
+{\Large\normalfont\sffamily\bfseries{{Supporting Information}}}
+
+% Set table variables
+\setlength{\tabcolsep}{18pt}
+\renewcommand{\arraystretch}{1.2}
+% Set table variables
+
+% start supporting info
+\input{manuscript/supporting}
+% end supporting info
+
+
+\end{document}
+%
+% ****** End of file aiptemplate.tex ******

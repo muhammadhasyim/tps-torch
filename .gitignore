@@ -31,3 +31,30 @@ build*/
 # Python egg metadata, regenerated from source files by setuptools.
 /*.egg
 /*.egg-info
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Data files (large)
+*.dcd
+*.xtc
+*.trr
+*.h5
+
+# Checkpoints
+checkpoints/
+*.pt
+*.ckpt
