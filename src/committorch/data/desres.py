@@ -31,7 +31,7 @@ from pathlib import Path
 
 import torch
 
-from .trajectory import Trajectory, load_trajectory
+from .trajectory import Trajectory, load_trajectory, HAS_MDTRAJ
 from .features import rmsd
 
 
@@ -98,6 +98,39 @@ PROTEINS = {
 }
 
 
+def _resolve_protein(protein: str | FoldingProtein) -> FoldingProtein:
+    """Resolve a protein name or instance."""
+    if isinstance(protein, str):
+        if protein not in PROTEINS:
+            raise ValueError(
+                f"Unknown protein '{protein}'. "
+                f"Available: {list(PROTEINS.keys())}"
+            )
+        return PROTEINS[protein]
+    return protein
+
+
+def _get_ca_indices(topology_path: str | Path) -> list[int]:
+    """Extract C-alpha atom indices from a PDB topology.
+
+    Parameters
+    ----------
+    topology_path : str or Path
+        Path to PDB file.
+
+    Returns
+    -------
+    list of int
+        Indices of C-alpha atoms.
+    """
+    if not HAS_MDTRAJ:
+        raise ImportError("mdtraj is required for CA selection")
+
+    import mdtraj
+    top = mdtraj.load(str(topology_path)).topology
+    return top.select("name CA").tolist()
+
+
 def load_desres_trajectory(
     trajectory_dir: str | Path,
     protein: str | FoldingProtein,
@@ -124,12 +157,7 @@ def load_desres_trajectory(
     -------
     Trajectory
     """
-    if isinstance(protein, str):
-        if protein not in PROTEINS:
-            raise ValueError(
-                f"Unknown protein '{protein}'. Available: {list(PROTEINS.keys())}"
-            )
-        protein = PROTEINS[protein]
+    protein_info = _resolve_protein(protein)
 
     traj_dir = Path(trajectory_dir)
     traj_files = sorted(traj_dir.glob("*.dcd")) + sorted(traj_dir.glob("*.xtc"))
@@ -150,13 +178,104 @@ def load_desres_trajectory(
                 f"Provide topology_file explicitly."
             )
 
+    atom_indices = None
+    if ca_only:
+        atom_indices = _get_ca_indices(topology_file)
+
     traj = load_trajectory(
         str(traj_files[0]),
         topology_path=str(topology_file),
         stride=stride,
+        atom_indices=atom_indices,
     )
-    traj.metadata["protein"] = protein.name
+    traj.metadata["protein"] = protein_info.name
+    traj.metadata["ca_only"] = ca_only
     return traj
+
+
+def load_native_structure(
+    protein: str | FoldingProtein,
+    pdb_path: str | Path | None = None,
+    ca_only: bool = True,
+) -> Trajectory:
+    """Load the native (reference) structure for a DESRES protein.
+
+    Parameters
+    ----------
+    protein : str or FoldingProtein
+        Protein name or instance.
+    pdb_path : str or Path or None
+        Path to PDB file. If None, uses the PDB ID from metadata
+        (requires the file to be present locally).
+    ca_only : bool
+        If True, return only C-alpha atoms.
+
+    Returns
+    -------
+    Trajectory
+        Single-frame trajectory with the native structure.
+    """
+    protein_info = _resolve_protein(protein)
+
+    if pdb_path is None:
+        raise ValueError(
+            f"pdb_path must be provided for {protein_info.name} "
+            f"(PDB ID: {protein_info.pdb_id}). "
+            f"Download from https://www.rcsb.org/structure/{protein_info.pdb_id}"
+        )
+
+    atom_indices = None
+    if ca_only and HAS_MDTRAJ:
+        atom_indices = _get_ca_indices(pdb_path)
+
+    if HAS_MDTRAJ:
+        import mdtraj
+        struct = mdtraj.load(str(pdb_path), atom_indices=atom_indices)
+        positions = torch.tensor(struct.xyz, dtype=torch.float64)
+        return Trajectory(
+            positions=positions,
+            topology=struct.topology,
+            metadata={"protein": protein_info.name, "native": True},
+        )
+
+    raise ImportError("mdtraj is required for loading native structures")
+
+
+def compute_committor_along_trajectory(
+    model: torch.nn.Module,
+    trajectory: Trajectory,
+    batch_size: int = 256,
+) -> torch.Tensor:
+    """Evaluate the committor q(x) for every frame in a trajectory.
+
+    Parameters
+    ----------
+    model : CommittorModel
+        Trained committor model.
+    trajectory : Trajectory
+        Trajectory with positions (n_frames, n_atoms, 3).
+    batch_size : int
+        Process this many frames at once.
+
+    Returns
+    -------
+    torch.Tensor, shape (n_frames,)
+        Committor values in [0, 1].
+    """
+    positions = trajectory.positions  # (n_frames, n_atoms, 3)
+    n_frames = positions.shape[0]
+    committors = torch.zeros(n_frames, dtype=torch.float64)
+
+    model.eval()
+    with torch.no_grad():
+        for start in range(0, n_frames, batch_size):
+            end = min(start + batch_size, n_frames)
+            batch = positions[start:end]
+            flat = batch.reshape(end - start, -1).float()
+            q = model(flat).double()
+            committors[start:end] = q
+
+    return committors
 
 
 def compute_brute_force_rate(

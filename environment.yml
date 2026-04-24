@@ -1,0 +1,58 @@
+# Conda environment for tps-torch / committorch (recommended on Linux/macOS).
+#
+# OpenMM, PDBFixer, openmm-torch (PyTorch forces; same plugin as PyPI `openmmtorch`),
+# and a modern libstdc++ (CXXABI) all come from conda-forge so native libraries match.
+#
+# From the repository root (so the editable install resolves):
+#   conda env create -f environment.yml
+#   conda activate tpstorch
+#
+# If `tpstorch` already exists with wrong packages, remove and recreate:
+#   conda deactivate
+#   conda env remove -n tpstorch -y
+#   conda env create -f environment.yml
+#   conda activate tpstorch
+#
+# If you created the env without the pip section, run:
+#   pip install -e ".[dev]"
+#
+# Optional: after `conda activate`, you can `source scripts/conda-ld-library-path.sh`
+# in new shells to prepend $CONDA_PREFIX/lib for every command (the Python
+# entrypoints in this repo also do this in-process for OpenMM).
+#
+# GPU: this file targets CUDA 12.6 (pytorch=*=cuda126*, openmm-torch=*=cuda126*).
+# Driver >= 525 and nvidia-smi "CUDA Version" >= 12.6 required.
+# For CUDA 12.9 builds (newer driver only), change all cuda126 -> cuda129.
+
+name: tpstorch
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  # Newer C++ ABI than many system libstdc++ — required by conda-forge libOpenMM.so
+  - libstdcxx-ng>=12
+  # Pin CUDA 12.6 so conda-forge resolves CUDA builds consistently
+  - cuda-version=12.6
+  # OpenMM: 8.2.x matches openmm-torch 1.5 CUDA 12.6 stack
+  - openmm>=8.2,<8.3
+  # openmm-torch CUDA 12.6 build (provides TorchForce for NN biases in MD)
+  - openmm-torch=1.5.1=cuda126py312*
+  - pdbfixer
+  - mdtraj
+  - numpy
+  - scipy
+  - pydantic>=2
+  - tqdm
+  # PyTorch 2.6.0 CUDA 12.6 build (GPU tensors + autograd)
+  - pytorch=2.6.0=cuda126*
+  - pytest>=7
+  - pytest-cov
+  - ruff
+  - mypy
+  - hypothesis
+  - pip
+  - pip:
+      # MACE foundation model support (auto-downloads MACE-OFF23, MACE-MP-0)
+      - "mace-torch>=0.3.12"
+      - "e3nn>=0.4.4"
+      - "-e .[dev]"

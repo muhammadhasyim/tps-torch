@@ -2,30 +2,29 @@
 
 Usage::
 
-    from committorch.models.pretrained import load_pretrained
+    # Foundation model (recommended) -- auto-downloads MACE-OFF23 small
+    model = load_pretrained("mace", model_name="mace-off", size="small",
+                            atomic_numbers=z)
 
-    model = load_pretrained("distance_encoder", n_atoms=10, freeze_encoder=True)
+    # Shorthand
+    model = load_pretrained("mace-off-small", atomic_numbers=z)
 
-For actual MLIP models (MACE, SchNet, PaiNN), the corresponding
-packages must be installed.
+    # Test-only distance encoder (no external deps)
+    model = load_pretrained("distance_encoder", n_atoms=10)
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from .base import CommittorModel
 from .equivariant.backbone import DistanceEncoder, PretrainedBackbone
-from .equivariant.mace import MACECommittor
-from .equivariant.schnet import SchNetCommittor
-from .equivariant.painn import PaiNNCommittor
-
-
-_REGISTRY: dict[str, type] = {
-    "mace": MACECommittor,
-    "schnet": SchNetCommittor,
-    "painn": PaiNNCommittor,
-}
+from .equivariant.mace import (
+    AVAILABLE_FOUNDATION_MODELS,
+    MACECommittor,
+    parse_foundation_model_spec,
+)
 
 
 def load_pretrained(
@@ -40,11 +39,16 @@ def load_pretrained(
     Parameters
     ----------
     name : str
-        Model name.  Built-in options:
-        - "distance_encoder": lightweight pairwise-distance MLP (no deps).
-        - "mace": MACE backbone (requires mace-torch).
-        - "schnet": SchNet backbone (requires schnetpack).
-        - "painn": PaiNN backbone (requires schnetpack).
+        Model identifier.  Options:
+
+        - ``"distance_encoder"``: lightweight all-pairs-distance MLP.
+          Test-only; scales as O(N^2) and is not suitable for production.
+        - ``"mace"``: MACE backbone.  Pass ``model_name`` and ``size``
+          kwargs (or ``checkpoint_path`` for a custom checkpoint).
+        - ``"mace-off-small"``, ``"mace-off-medium"``, etc.: shorthand
+          that auto-parses the family and size.
+        - ``"schnet"``, ``"painn"``: deprecated stubs.
+
     freeze_encoder : bool
         Whether to freeze the encoder parameters.
     sigmoid_steepness : float
@@ -52,15 +56,17 @@ def load_pretrained(
     head_hidden_dims : tuple
         Hidden dims for the committor head MLP.
     **kwargs
-        Additional keyword arguments passed to the model constructor.
-        For "distance_encoder": n_atoms, hidden_dim, output_dim.
-        For MLIP models: the pre-trained model object or checkpoint path.
+        Additional keyword arguments.  For ``"mace"``: ``model_name``,
+        ``size``, ``atomic_numbers``, ``cutoff``, ``feature_dim``,
+        ``device``.  For ``"distance_encoder"``: ``n_atoms``,
+        ``hidden_dim``, ``output_dim``.
 
     Returns
     -------
     CommittorModel
         Ready-to-train committor model.
     """
+    # --- Distance encoder (test-only) ---
     if name == "distance_encoder":
         n_atoms = kwargs.get("n_atoms", 10)
         hidden_dim = kwargs.get("hidden_dim", 64)
@@ -74,16 +80,89 @@ def load_pretrained(
             freeze_encoder=freeze_encoder,
         )
 
-    if name in _REGISTRY:
-        cls = _REGISTRY[name]
-        return cls(
+    # --- Shorthand: "mace-off-small", "mace-mp-medium", etc. ---
+    if name in AVAILABLE_FOUNDATION_MODELS:
+        model_name, size = parse_foundation_model_spec(name)
+        return MACECommittor.from_pretrained(
+            model_name=model_name,
+            size=size,
+            atomic_numbers=kwargs.get("atomic_numbers"),
+            feature_dim=kwargs.get("feature_dim", 128),
+            head_hidden_dims=head_hidden_dims,
+            sigmoid_steepness=sigmoid_steepness,
+            freeze_encoder=freeze_encoder,
+            device=kwargs.get("device", "cpu"),
+        )
+
+    # --- Explicit "mace" with kwargs ---
+    if name == "mace":
+        model_name_kw = kwargs.pop("model_name", None)
+        size_kw = kwargs.pop("size", "small")
+        checkpoint_path = kwargs.pop("checkpoint_path", None)
+        atomic_numbers = kwargs.pop("atomic_numbers", None)
+        cutoff = kwargs.pop("cutoff", 5.0)
+        feature_dim = kwargs.pop("feature_dim", 128)
+        device = kwargs.pop("device", "cpu")
+
+        if model_name_kw is not None:
+            return MACECommittor.from_pretrained(
+                model_name=model_name_kw,
+                size=size_kw,
+                atomic_numbers=atomic_numbers,
+                feature_dim=feature_dim,
+                head_hidden_dims=head_hidden_dims,
+                sigmoid_steepness=sigmoid_steepness,
+                freeze_encoder=freeze_encoder,
+                device=device,
+            )
+        if checkpoint_path is not None:
+            if atomic_numbers is None:
+                raise ValueError(
+                    "atomic_numbers is required when loading MACE from a checkpoint"
+                )
+            return MACECommittor.from_pretrained(
+                checkpoint_path=checkpoint_path,
+                atomic_numbers=atomic_numbers,
+                cutoff=cutoff,
+                feature_dim=feature_dim,
+                head_hidden_dims=head_hidden_dims,
+                sigmoid_steepness=sigmoid_steepness,
+                freeze_encoder=freeze_encoder,
+                device=device,
+            )
+        raise ValueError(
+            "For name='mace', provide either model_name (e.g. 'mace-off') "
+            "or checkpoint_path."
+        )
+
+    # --- Deprecated stubs ---
+    if name in ("schnet", "painn"):
+        warnings.warn(
+            f"'{name}' is a deprecated placeholder adapter with no real "
+            f"pre-trained model support. Use 'mace' or a 'mace-off-*' "
+            f"shorthand instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if name == "schnet":
+            from .equivariant.schnet import SchNetCommittor
+
+            return SchNetCommittor(
+                freeze_encoder=freeze_encoder,
+                sigmoid_steepness=sigmoid_steepness,
+                head_hidden_dims=head_hidden_dims,
+                **kwargs,
+            )
+        from .equivariant.painn import PaiNNCommittor
+
+        return PaiNNCommittor(
             freeze_encoder=freeze_encoder,
             sigmoid_steepness=sigmoid_steepness,
             head_hidden_dims=head_hidden_dims,
             **kwargs,
         )
 
+    available = ["distance_encoder", "mace"] + AVAILABLE_FOUNDATION_MODELS
     raise ValueError(
-        f"Unknown model name '{name}'. Available: "
-        f"{list(_REGISTRY.keys()) + ['distance_encoder']}"
+        f"Unknown model name '{name}'. Available: {available}"
     )

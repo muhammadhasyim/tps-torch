@@ -1,6 +1,7 @@
+
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.20"]
+build-backend = "hatchling.build"
 
 [project]
 name = "committorch"
@@ -34,13 +35,25 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Note: PyTorch NN forces use the PyPI package *openmmtorch* (import name: openmmtorch).
+# The hyphenated name "openmm-torch" is conda-forge; it is not published on PyPI.
 openmm = [
     "openmm>=8.0",
-    "openmm-torch>=1.5",
+    "openmmtorch>=1.5",
+    "pdbfixer>=1.8",
+]
+# Use with conda-installed OpenMM + pdbfixer (see environment.yml) to avoid a
+# second OpenMM build from pip and mixed libstdc++/CUDA stacks.
+openmm-from-conda = [
+    "openmmtorch>=1.5",
+]
+mace = [
+    "mace-torch>=0.3.12",
+    "e3nn>=0.4.4",
 ]
 equivariant = [
-    "e3nn",
-    "mace-torch",
+    "e3nn>=0.4.4",
+    "mace-torch>=0.3.12",
     "schnetpack",
 ]
 trajectory = [
@@ -65,8 +78,9 @@ all = [
 Homepage = "https://github.com/muhammadhasyim/tps-torch"
 Repository = "https://github.com/muhammadhasyim/tps-torch"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# src-layout package: `src/committorch/`
+[tool.hatch.build.targets.wheel]
+packages = ["src/committorch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

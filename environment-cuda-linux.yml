@@ -1,0 +1,35 @@
+# Optional Linux env for maximum OpenMM+CUDA compatibility with *older* NVIDIA drivers.
+# Use this file instead of environment.yml if `python scripts/verify_openmm_cuda.py` still
+# reports PTX 222 with the default 8.2.x install.
+#
+#   conda env create -f environment-cuda-linux.yml
+#   conda activate tpstorch
+#   pip install -e ".[dev]"
+#
+# The extra `cudatoolkit=11.8` nudges conda-forge toward the OpenMM 8.2 build that links
+# against the 11.8 user toolkit (wider driver support than 8.5’s CUDA 12.9+ requirement).
+
+name: tpstorch
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - libstdcxx-ng>=12
+  - cudatoolkit=11.8
+  - openmm >=8.2,<8.3
+  - openmm-torch >=1.5
+  - pdbfixer
+  - mdtraj
+  - numpy
+  - scipy
+  - pydantic>=2
+  - tqdm
+  - pytorch-cpu>=2
+  - pytest>=7
+  - pytest-cov
+  - ruff
+  - mypy
+  - hypothesis
+  - pip
+  - pip:
+      - "-e .[dev]"

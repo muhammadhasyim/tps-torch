@@ -58,14 +58,22 @@ class PretrainedBackbone(CommittorModel):
         prev = feature_dim
         for h in head_hidden_dims:
             layers.append(nn.Linear(prev, h))
-            layers.append(nn.SiLU())
+            # ReLU (not SiLU): openmm-torch force evaluation can raise
+            # "derivative for aten::silu_backward is not implemented" on traced graphs.
+            layers.append(nn.ReLU())
             prev = h
         layers.append(nn.Linear(prev, 1))
         self.head = nn.Sequential(*layers)
 
     def _latent(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute z(x) = head(encoder(x))."""
+        """Compute z(x) = head(encoder(x)).
+
+        The encoder handles both flat (batch, dim) and molecular
+        (batch, n_atoms, 3) inputs transparently.
+        """
         features = self.encoder(x)
+        if features.dim() == 1:
+            features = features.unsqueeze(0)
         return self.head(features)
 
     def unfreeze_encoder(self, lr_scale: float = 0.1) -> list[dict]:
@@ -94,13 +102,22 @@ class PretrainedBackbone(CommittorModel):
 
 
 class DistanceEncoder(nn.Module):
-    """Simple invariant encoder using pairwise distances.
+    """Simple invariant encoder using pairwise distances (**test-only**).
 
-    Computes all pairwise inter-atomic distances and passes them
-    through an MLP.  This is SE(3)-invariant by construction.
+    Computes all N*(N-1)/2 pairwise inter-atomic distances and passes them
+    through a small MLP.  SE(3)-invariant by construction.
 
-    Useful as a lightweight baseline and for testing the backbone
-    interface without heavy equivariant libraries.
+    .. warning::
+        This encoder is intended **only** for unit tests, CI, and small
+        toy systems (< 50 atoms).  The first Linear layer has N*(N-1)/2
+        inputs, so memory scales as O(N^2).  For solvated proteins (thousands
+        of atoms) this is prohibitively expensive and scientifically
+        meaningless (water-water distances carry no folding information).
+
+        For production use, see
+        :class:`~committorch.models.equivariant.mace.MACECommittor` with a
+        pre-trained MACE foundation model, which uses local atomic
+        environments with a radial cutoff and scales as O(N).
 
     Parameters
     ----------
@@ -123,10 +140,15 @@ class DistanceEncoder(nn.Module):
         n_pairs = n_atoms * (n_atoms - 1) // 2
         self.mlp = nn.Sequential(
             nn.Linear(n_pairs, hidden_dim),
-            nn.SiLU(),
+            nn.ReLU(),
             nn.Linear(hidden_dim, output_dim),
         )
-        self._triu_indices = torch.triu_indices(n_atoms, n_atoms, offset=1)
+        # register_buffer ensures _triu_indices is moved to the correct device
+        # automatically when model.to(device) or model.cuda() is called, avoiding
+        # CPU/CUDA device mismatches inside JIT-traced modules.
+        self.register_buffer(
+            "_triu_indices", torch.triu_indices(n_atoms, n_atoms, offset=1)
+        )
 
     def forward(self, positions: torch.Tensor) -> torch.Tensor:
         """Compute invariant features from positions.
@@ -139,11 +161,16 @@ class DistanceEncoder(nn.Module):
         -------
         torch.Tensor, shape (batch, output_dim)
         """
-        if positions.dim() == 2 and positions.shape[-1] == self.n_atoms * 3:
+        # 2D layout is (batch, n_atoms * 3). Reshape using self.n_atoms so that
+        # the shape is statically known (avoids any storage-access issues under
+        # functorch transforms).
+        if positions.dim() == 2:
             positions = positions.reshape(-1, self.n_atoms, 3)
 
-        diffs = positions.unsqueeze(2) - positions.unsqueeze(1)
-        dist_matrix = torch.sqrt((diffs**2).sum(dim=-1) + 1e-10)
-        idx = self._triu_indices.to(positions.device)
-        pairwise = dist_matrix[:, idx[0], idx[1]]
+        # torch.cdist uses the ||a||²+||b||²-2a·b identity so peak memory is
+        # O(B*N²) instead of O(B*N²*3) for the explicit diff tensor.
+        # upper-triangular distances (i≠j) are always positive so no sqrt-eps needed.
+        dist_matrix = torch.cdist(positions, positions)
+        # _triu_indices lives on the same device as model parameters (register_buffer).
+        pairwise = dist_matrix[:, self._triu_indices[0], self._triu_indices[1]]
         return self.mlp(pairwise)

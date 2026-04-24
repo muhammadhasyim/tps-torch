@@ -1,9 +1,9 @@
 """SchNet backbone adapter for committor prediction.
 
-SchNet uses continuous-filter convolutions on a graph of atoms,
-producing invariant representations suitable for scalar prediction.
-
-Requires: schnetpack (pip install schnetpack)
+.. deprecated::
+    This is a **placeholder stub** with no real SchNet integration.
+    Use :class:`~committorch.models.equivariant.mace.MACECommittor` with
+    a pre-trained MACE foundation model instead.
 
 References
 ----------
@@ -11,6 +11,8 @@ References
 """
 
 from __future__ import annotations
+
+import warnings
 
 import torch
 import torch.nn as nn
@@ -21,16 +23,9 @@ from .backbone import PretrainedBackbone
 class SchNetCommittor(PretrainedBackbone):
     """Committor model using a SchNet encoder.
 
-    Placeholder adapter documenting the interface.  Actual SchNet loading
-    requires schnetpack.
-
-    Parameters
-    ----------
-    schnet_model : nn.Module or None
-    feature_dim : int
-    head_hidden_dims : tuple of int
-    sigmoid_steepness : float
-    freeze_encoder : bool
+    .. deprecated::
+        Placeholder adapter with no pre-trained model loading.
+        Use ``MACECommittor.from_foundation()`` instead.
     """
 
     def __init__(
@@ -41,6 +36,12 @@ class SchNetCommittor(PretrainedBackbone):
         sigmoid_steepness: float = 1.0,
         freeze_encoder: bool = True,
     ) -> None:
+        warnings.warn(
+            "SchNetCommittor is a deprecated placeholder with no real "
+            "pre-trained model support. Use MACECommittor instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if schnet_model is None:
             encoder = _PlaceholderEncoder(feature_dim)
         else:

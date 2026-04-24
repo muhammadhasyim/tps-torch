@@ -1,0 +1,20 @@
+INFO:root:Running 50000 steps at 500.0 K ...
+Traceback (most recent call last):
+  File "/media/extradrive/Trajectories/tps-torch/examples/cln025/make_unfolded_snapshot.py", line 115, in <module>
+    run()
+  File "/media/extradrive/Trajectories/tps-torch/examples/cln025/make_unfolded_snapshot.py", line 107, in run
+    sim.step(args.n_steps)
+  File "/home/mh7373/miniconda3/envs/tpstorch/lib/python3.12/site-packages/openmm/app/simulation.py", line 150, in step
+    self._simulate(endStep=self.currentStep+steps)
+  File "/home/mh7373/miniconda3/envs/tpstorch/lib/python3.12/site-packages/openmm/app/simulation.py", line 229, in _simulate
+    self.integrator.step(10) # Only take 10 steps at a time, to give Python more chances to respond to a control-c.
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mh7373/miniconda3/envs/tpstorch/lib/python3.12/site-packages/openmm/openmm.py", line 18765, in step
+    return _openmm.LangevinMiddleIntegrator_step(self, steps)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openmm.OpenMMException: Particle coordinate is NaN.  For more information, see https://github.com/openmm/openmm/wiki/Frequently-Asked-Questions#nan
+INFO:root:Removed MonteCarloBarostat (NPT at high T is unstable for this use case; use --keep_barostat to retain it).
+INFO:root:Minimizing energy (quick local cleanup before MD)...
+INFO:root:Warm-up: 10000 steps at 340.0 K
+INFO:root:Production: 30000 steps at 450.0 K ...
+INFO:root:Wrote output/unfolded_solvated.pdb

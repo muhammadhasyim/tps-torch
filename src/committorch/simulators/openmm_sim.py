@@ -1,13 +1,15 @@
 """OpenMM simulator wrapper with openmm-torch integration.
 
 Wraps an OpenMM ``Simulation`` object and uses the ``openmm-torch``
-plugin to apply NN-derived biases (V_K, umbrella, OPES hills) as
-custom forces during simulation.
+plugin to apply NN-derived biases (V_K, umbrella, OPES) as custom
+forces during simulation.
 
-The key components:
-1. ``TorchForce``: wraps a traced PyTorch model as an OpenMM force
-2. ``CustomCVForce``: uses z(x) from the committor as a collective variable
-3. ``Metadynamics``: OpenMM's built-in metadynamics with TorchForce-based BiasVariable
+The feedback loop works as follows:
+1. ``add_committor_bias()``: serialize model, create TorchForce, add to System
+2. ``step()``: run MD with the current bias
+3. ``get_positions()``: extract current positions as a torch tensor
+4. (train model in Python)
+5. ``refresh_bias()``: re-serialize updated model, swap TorchForce, reinitialize
 
 Requirements
 ------------
@@ -21,6 +23,14 @@ References
 
 from __future__ import annotations
 
+from ..conda_ld_path import ensure_conda_lib_path
+
+ensure_conda_lib_path()
+
+import os
+import tempfile
+from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -44,6 +54,65 @@ try:
     HAS_OPENMM_TORCH = True
 except ImportError:
     pass
+
+
+class BiasType(str, Enum):
+    """Types of bias that can be applied via TorchForce."""
+    NONE = "none"
+    UMBRELLA = "umbrella"
+    KOLMOGOROV = "kolmogorov"
+    COMBINED_VK_OPES = "combined_vk_opes"
+
+
+def _kolmogorov_bias_energy(
+    model: CommittorModel,
+    pos: torch.Tensor,
+    lam: float,
+    beta: float,
+    eps: float = 1e-10,
+) -> torch.Tensor:
+    """Kolmogorov :math:`V_K` using ``torch.autograd.grad`` with explicit gradient scope.
+
+    ``torch.func.jacrev`` was previously used here but its internal ``vmap`` creates
+    CPU-resident accumulation buffers even when the model is on CUDA, causing a
+    device mismatch when the traced module is called by TorchForce on GPU.
+
+    ``torch.autograd.grad`` avoids ``vmap`` entirely — it computes a single VJP
+    (one backward pass) which is O(n_params) instead of O(n_input) and is fully
+    JIT-traceable on any device.  ``torch.enable_grad()`` overrides any enclosing
+    ``torch.no_grad()`` context (e.g. during ``torch.jit.trace``), so the input
+    tensor can accumulate a gradient for the backward call.
+
+    ``create_graph=True`` is required so that the returned ``grad_z`` retains a
+    ``grad_fn``; without it ``grad_z_sq`` would be a leaf tensor with no gradient
+    and TorchForce would fail when it tries to differentiate the energy to get forces.
+
+    Note
+    ----
+    For large systems (≫ 100 atoms) the Hessian-level computation implied by
+    second-order differentiation via TorchForce is expensive.  Use
+    ``bias_type="umbrella"`` for production runs on large proteins; Kolmogorov
+    is correct and efficient for small test cases.
+    """
+    import torch.nn.functional as F
+
+    param_dtype = next(model.parameters()).dtype
+    param_device = next(model.parameters()).device
+    x = pos.reshape(1, -1).to(device=param_device, dtype=param_dtype)
+
+    with torch.enable_grad():
+        x_grad = x.detach().requires_grad_(True)
+        z = model.latent(x_grad)
+        (grad_z,) = torch.autograd.grad(
+            z.sum(), x_grad, create_graph=True
+        )
+
+    grad_z_sq = (grad_z**2).sum()
+    p = model.sigmoid_steepness
+    log_grad_z_sq = torch.log(grad_z_sq + eps)
+    softplus_term = 4.0 * F.softplus(-p * z)
+    linear_term = 2.0 * p * z
+    return (lam / beta) * (log_grad_z_sq - softplus_term - linear_term).squeeze()
 
 
 class CommittorBiasModule(nn.Module):
@@ -86,6 +155,11 @@ class CommittorBiasModule(nn.Module):
         torch.Tensor
             Scalar bias energy.
         """
+        param_dtype = next(self.model.parameters()).dtype
+        param_device = next(self.model.parameters()).device
+        # Cast both dtype and device: OpenMM CUDA passes float64 CUDA tensors;
+        # the model may be on a different device than the raw positions.
+        positions = positions.to(device=param_device, dtype=param_dtype)
         pos = positions.reshape(1, -1)
         if self.bias_type == "umbrella":
             q = self.model(pos)
@@ -93,13 +167,14 @@ class CommittorBiasModule(nn.Module):
             kappa = self.bias_params.get("spring_constant", 100.0)
             return 0.5 * kappa * (q.squeeze() - target) ** 2
         elif self.bias_type == "kolmogorov":
-            from ..sampling.kolmogorov import KolmogorovBias
             lam = self.bias_params.get("lambda", 1.0)
             beta = self.bias_params.get("beta", 1.0)
-            vk = KolmogorovBias(self.model, lam=lam, beta=beta)
-            return vk.bias_energy(pos).squeeze()
+            eps = self.bias_params.get("eps", 1e-10)
+            return _kolmogorov_bias_energy(
+                self.model, pos, lam=lam, beta=beta, eps=eps
+            )
         else:
-            return torch.tensor(0.0, dtype=positions.dtype)
+            return torch.tensor(0.0, dtype=param_dtype, device=param_device)
 
 
 class CommittorCVModule(nn.Module):
@@ -117,21 +192,94 @@ class CommittorCVModule(nn.Module):
 
     def forward(self, positions: torch.Tensor) -> torch.Tensor:
         """Return z(x), the pre-sigmoid latent, as a scalar CV."""
+        param_dtype = next(self.model.parameters()).dtype
+        param_device = next(self.model.parameters()).device
+        positions = positions.to(device=param_device, dtype=param_dtype)
         pos = positions.reshape(1, -1)
         return self.model.latent(pos).squeeze()
 
 
+def _trace_staging_dir() -> str | None:
+    """Writable directory for large TorchScript traces.
+
+    Default system temp (often ``/tmp`` on the root filesystem) may be
+    full on HPC nodes while the project disk still has space. Prefer
+    ``COMMITTORCH_JIT_TMPDIR``, then the process current working directory.
+    """
+    env = os.environ.get("COMMITTORCH_JIT_TMPDIR")
+    if env:
+        p = Path(env)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            if os.access(p, os.W_OK):
+                return str(p)
+        except OSError:
+            pass
+    cwd = Path.cwd()
+    if cwd.is_dir() and os.access(cwd, os.W_OK):
+        return str(cwd)
+    return None
+
+
+def _serialize_bias_module(
+    model: CommittorModel,
+    bias_type: str = "none",
+    bias_params: dict | None = None,
+    n_atoms: int = 2,
+) -> str:
+    """Trace a CommittorBiasModule and save to a temp file.
+
+    Uses ``torch.jit.trace`` rather than ``torch.jit.script`` to
+    avoid JIT limitations (inline imports, dynamic dispatch).
+
+    Parameters
+    ----------
+    n_atoms : int
+        Number of atoms, used to construct the example input for tracing.
+
+    Returns
+    -------
+    str
+        Path to the saved .pt file.
+    """
+    bias_module = CommittorBiasModule(model, bias_type, bias_params)
+    bias_module.eval()
+    # Trace on the model's own device so JIT ops are baked in for the correct
+    # device (CUDA or CPU).  TorchForce will call this module with positions on
+    # the same device as the OpenMM platform (CUDA when using Platform=CUDA).
+    param_device = next(model.parameters()).device
+    example_input = torch.randn(n_atoms, 3, device=param_device)
+    with torch.no_grad():
+        traced = torch.jit.trace(bias_module, example_input)
+    staging = _trace_staging_dir()
+    tmp = tempfile.NamedTemporaryFile(
+        suffix=".pt", delete=False, dir=staging if staging else None
+    )
+    traced.save(tmp.name)
+    tmp.close()
+    return tmp.name
+
+
 class OpenMMSimulator(Simulator):
-    """OpenMM-based simulator with optional NN bias forces.
+    """OpenMM-based simulator with NN bias forces via openmm-torch.
+
+    Supports the feedback loop: the committor model can be re-injected
+    after training via ``refresh_bias()``, which re-serializes the model
+    and swaps the TorchForce without losing the simulation state.
 
     Parameters
     ----------
     simulation : openmm.app.Simulation or None
-        Pre-configured OpenMM simulation.  None for testing without OpenMM.
+        Pre-configured OpenMM simulation. None for testing without OpenMM.
     model : CommittorModel or None
         Committor model for bias forces.
     kT : float
-        Thermal energy in kJ/mol.
+        Thermal energy in kJ/mol (default: 2.494 ~ 300 K).
+    dim : int
+        Dimensionality override (auto-detected from simulation if available).
+    flatten_positions : bool
+        If True, ``step()`` and ``get_positions()`` return (1, n_atoms*3).
+        If False, they return (1, n_atoms, 3).
     """
 
     def __init__(
@@ -140,14 +288,67 @@ class OpenMMSimulator(Simulator):
         model: CommittorModel | None = None,
         kT: float = 2.494,
         dim: int = 0,
+        flatten_positions: bool = True,
     ) -> None:
+        self._n_atoms: int = 0
         if simulation is not None and HAS_OPENMM:
-            n_atoms = simulation.topology.getNumAtoms()
-            dim = n_atoms * 3
+            self._n_atoms = simulation.topology.getNumAtoms()
+            dim = self._n_atoms * 3
         super().__init__(dim=dim, kT=kT)
         self.simulation = simulation
         self.model = model
+        self.flatten_positions = flatten_positions
         self._torch_force_idx: int | None = None
+        self._bias_type: str = "none"
+        self._bias_params: dict = {}
+        self._serialized_model_path: str | None = None
+
+    @property
+    def n_atoms(self) -> int:
+        return self._n_atoms
+
+    def get_positions(self) -> torch.Tensor:
+        """Extract current positions from the OpenMM context.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape (1, n_atoms*3) if flatten_positions, else (1, n_atoms, 3).
+        """
+        if self.simulation is None:
+            raise RuntimeError("No OpenMM simulation configured")
+
+        state = self.simulation.context.getState(getPositions=True)
+        positions = state.getPositions(asNumpy=True)
+        import numpy as np
+        pos_nm = np.array(positions.value_in_unit(positions.unit))
+        pos_t = torch.tensor(pos_nm, dtype=torch.float32)
+        if self.model is not None:
+            param_device = next(self.model.parameters()).device
+            pos_t = pos_t.to(device=param_device)
+        if self.flatten_positions:
+            return pos_t.reshape(1, -1)
+        return pos_t.unsqueeze(0)
+
+    def set_positions(self, positions: torch.Tensor) -> None:
+        """Set positions in the OpenMM context.
+
+        Parameters
+        ----------
+        positions : torch.Tensor
+            Shape (n_atoms, 3), (1, n_atoms, 3), or (1, n_atoms*3).
+        """
+        if self.simulation is None:
+            raise RuntimeError("No OpenMM simulation configured")
+
+        pos = positions.detach().cpu()
+        if pos.dim() == 3:
+            pos = pos.squeeze(0)
+        elif pos.dim() == 2 and pos.shape[0] == 1:
+            pos = pos.reshape(self._n_atoms, 3)
+
+        pos_list = pos.numpy().tolist()
+        self.simulation.context.setPositions(pos_list)
 
     def add_committor_bias(
         self,
@@ -159,7 +360,9 @@ class OpenMMSimulator(Simulator):
         Parameters
         ----------
         bias_type : str
+            One of "umbrella", "kolmogorov", "combined_vk_opes", "none".
         bias_params : dict
+            Bias-specific parameters.
         """
         if not HAS_OPENMM_TORCH:
             raise ImportError("openmm-torch is required for NN bias forces")
@@ -168,19 +371,59 @@ class OpenMMSimulator(Simulator):
         if self.simulation is None:
             raise ValueError("No OpenMM simulation set")
 
-        bias_module = CommittorBiasModule(self.model, bias_type, bias_params)
-        traced = torch.jit.script(bias_module)
+        self._bias_type = bias_type
+        self._bias_params = bias_params or {}
 
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
-            traced.save(f.name)
-            torch_force = TorchForce(f.name)
+        n_atoms = max(self._n_atoms, 2)
+        pt_path = _serialize_bias_module(
+            self.model, bias_type, self._bias_params, n_atoms=n_atoms
+        )
+        self._serialized_model_path = pt_path
+        torch_force = TorchForce(pt_path)
 
         system = self.simulation.system
         if self._torch_force_idx is not None:
             system.removeForce(self._torch_force_idx)
         self._torch_force_idx = system.addForce(torch_force)
         self.simulation.context.reinitialize(preserveState=True)
+
+    def refresh_bias(self, model: CommittorModel | None = None) -> None:
+        """Re-serialize the committor model and swap the TorchForce.
+
+        Call this after training to inject the updated model into the
+        running OpenMM simulation. Preserves positions and velocities.
+
+        Parameters
+        ----------
+        model : CommittorModel or None
+            Updated model. If None, uses ``self.model``.
+        """
+        if model is not None:
+            self.model = model
+
+        if self.model is None:
+            raise ValueError("No committor model to refresh")
+        if self.simulation is None:
+            raise RuntimeError("No OpenMM simulation configured")
+        if not HAS_OPENMM_TORCH:
+            raise ImportError("openmm-torch is required for NN bias forces")
+
+        n_atoms = max(self._n_atoms, 2)
+        pt_path = _serialize_bias_module(
+            self.model, self._bias_type, self._bias_params, n_atoms=n_atoms
+        )
+        old_path = self._serialized_model_path
+        self._serialized_model_path = pt_path
+
+        torch_force = TorchForce(pt_path)
+        system = self.simulation.system
+        if self._torch_force_idx is not None:
+            system.removeForce(self._torch_force_idx)
+        self._torch_force_idx = system.addForce(torch_force)
+        self.simulation.context.reinitialize(preserveState=True)
+
+        if old_path is not None:
+            Path(old_path).unlink(missing_ok=True)
 
     def step(self, x: torch.Tensor, n_steps: int = 1) -> torch.Tensor:
         """Advance the OpenMM simulation by n_steps.
@@ -189,41 +432,74 @@ class OpenMMSimulator(Simulator):
         ----------
         x : torch.Tensor
             Ignored for OpenMM (state is maintained internally).
-            Provided for interface compatibility.
+            Provided for interface compatibility with ``Simulator``.
         n_steps : int
             Number of MD steps.
 
         Returns
         -------
         torch.Tensor
-            Current positions as (1, n_atoms*3) tensor.
+            Current positions, shape depends on ``flatten_positions``.
         """
         if self.simulation is None:
             raise RuntimeError("No OpenMM simulation configured")
 
         self.simulation.step(n_steps)
-        state = self.simulation.context.getState(getPositions=True)
-        positions = state.getPositions(asNumpy=True)
-        import numpy as np
-        pos_array = np.array(positions.value_in_unit(positions.unit))
-        return torch.tensor(pos_array.reshape(1, -1), dtype=torch.float32)
+        return self.get_positions()
+
+    def step_and_collect(
+        self,
+        n_steps: int,
+        collect_interval: int = 1,
+    ) -> torch.Tensor:
+        """Run MD and collect snapshots at regular intervals.
+
+        Parameters
+        ----------
+        n_steps : int
+            Total MD steps to run.
+        collect_interval : int
+            Collect a snapshot every this many steps.
+
+        Returns
+        -------
+        torch.Tensor
+            Collected positions, shape (n_snapshots, n_atoms*3) or
+            (n_snapshots, n_atoms, 3) depending on ``flatten_positions``.
+        """
+        if self.simulation is None:
+            raise RuntimeError("No OpenMM simulation configured")
+
+        snapshots: list[torch.Tensor] = []
+        steps_done = 0
+        while steps_done < n_steps:
+            chunk = min(collect_interval, n_steps - steps_done)
+            self.simulation.step(chunk)
+            steps_done += chunk
+            snapshots.append(self.get_positions())
+
+        return torch.cat(snapshots, dim=0)
 
     def potential_energy(self, x: torch.Tensor) -> torch.Tensor:
         """Get the current potential energy from OpenMM."""
         if self.simulation is None:
-            return torch.tensor(0.0)
+            return torch.tensor(0.0, dtype=torch.float32)
         state = self.simulation.context.getState(getEnergy=True)
         energy = state.getPotentialEnergy()
-        import openmm.unit as unit
-        return torch.tensor(energy.value_in_unit(unit.kilojoules_per_mole))
+        import openmm.unit as u
+        return torch.tensor(
+            energy.value_in_unit(u.kilojoules_per_mole), dtype=torch.float32
+        )
 
     def force(self, x: torch.Tensor) -> torch.Tensor:
-        """Get forces from OpenMM (not typically called directly)."""
+        """Get forces from OpenMM."""
         if self.simulation is None:
             return torch.zeros_like(x)
         state = self.simulation.context.getState(getForces=True)
         forces = state.getForces(asNumpy=True)
         import numpy as np
-        import openmm.unit as unit
-        f_array = np.array(forces.value_in_unit(unit.kilojoules_per_mole / unit.nanometer))
+        import openmm.unit as u
+        f_array = np.array(
+            forces.value_in_unit(u.kilojoules_per_mole / u.nanometer)
+        )
         return torch.tensor(f_array.reshape(x.shape), dtype=torch.float32)
