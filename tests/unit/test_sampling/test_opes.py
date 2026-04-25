@@ -152,6 +152,83 @@ class TestOPESBias:
             f"Bias should become quasi-static; relative change = {relative_change:.4f}"
         )
 
+    def test_state_dict_round_trip(self):
+        """state_dict -> load_state_dict reproduces identical bias."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        opes = OPESBias(
+            model, sigma=0.5, barrier=5.0, bias_factor=10.0, beta=1.0,
+            compression_threshold=1.0,
+        )
+        opes.deposit_kernel(0.0)
+        opes.deposit_kernel(0.5)
+        opes.deposit_kernel(-1.0)
+
+        x = torch.randn(5, 2)
+        v_original = opes.bias_energy(x)
+        state = opes.state_dict()
+
+        opes2 = OPESBias(
+            model, sigma=0.5, barrier=5.0, bias_factor=10.0, beta=1.0,
+            compression_threshold=1.0,
+        )
+        assert opes2.n_kernels == 0
+        opes2.load_state_dict(state)
+
+        assert opes2.n_kernels == opes.n_kernels
+        v_restored = opes2.bias_energy(x)
+        torch.testing.assert_close(v_original, v_restored)
+
+    def test_state_dict_keys(self):
+        """state_dict contains all required keys."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        opes = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0)
+        opes.deposit_kernel(0.0)
+        state = opes.state_dict()
+        required = {
+            "kernel_centers", "kernel_sigmas", "kernel_weights",
+            "sum_weights", "sum_weights2", "counter", "Zed",
+        }
+        assert required <= set(state.keys())
+
+    def test_state_dict_empty_kernels(self):
+        """Round-trip with zero kernels."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        opes = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0)
+        state = opes.state_dict()
+        assert len(state["kernel_centers"]) == 0
+
+        opes2 = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0)
+        opes2.load_state_dict(state)
+        assert opes2.n_kernels == 0
+
+    def test_state_dict_preserves_running_sums(self):
+        """Running sums (sum_weights, counter, Zed) survive round-trip."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        opes = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0)
+        for i in range(10):
+            opes.deposit_kernel(float(i) * 0.1)
+
+        state = opes.state_dict()
+        opes2 = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0)
+        opes2.load_state_dict(state)
+
+        assert opes2._sum_weights == pytest.approx(opes._sum_weights)
+        assert opes2._sum_weights2 == pytest.approx(opes._sum_weights2)
+        assert opes2._counter == opes._counter
+        assert opes2._Zed == pytest.approx(opes._Zed)
+
+    def test_state_dict_tensors_are_1d(self):
+        """Kernel tensors in state_dict are 1-D for TorchForce serialization."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        opes = OPESBias(model, sigma=0.5, barrier=5.0, beta=1.0,
+                        compression_threshold=0.0)
+        opes.deposit_kernel(0.0)
+        opes.deposit_kernel(1.0)
+        state = opes.state_dict()
+        assert isinstance(state["kernel_centers"], torch.Tensor)
+        assert state["kernel_centers"].dim() == 1
+        assert state["kernel_centers"].shape[0] == 2
+
 
 class TestCombinedVKOPES:
     def test_combined_bias_shape(self):

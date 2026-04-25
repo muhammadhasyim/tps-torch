@@ -42,6 +42,65 @@ class TestBKELoss:
         for p in model.parameters():
             assert p.grad is not None
 
+    def test_mass_weighted_differs_from_unweighted(self, default_dtype):
+        """Mass-weighted loss != unweighted when masses differ."""
+        n_atoms = 3
+        model = CommittorMLP(input_dim=n_atoms * 3, hidden_dims=[16])
+        masses = torch.tensor([12.0, 1.0, 16.0])
+        loss_mw = BKELoss(model, atom_masses=masses)
+        loss_uw = BKELoss(model)
+        x = torch.randn(5, n_atoms * 3)
+        val_mw = loss_mw(x).item()
+        val_uw = loss_uw(x).item()
+        assert val_mw != pytest.approx(val_uw, rel=1e-3), (
+            "Mass-weighted and unweighted should differ for non-uniform masses"
+        )
+
+    def test_mass_weighted_manual_computation(self, default_dtype):
+        """Verify mass-weighted loss matches hand-computed formula."""
+        n_atoms = 2
+        model = CommittorMLP(input_dim=n_atoms * 3, hidden_dims=[16])
+        masses = torch.tensor([12.0, 1.0])
+        loss_fn = BKELoss(model, atom_masses=masses)
+        x = torch.randn(3, n_atoms * 3)
+        loss = loss_fn(x)
+
+        grad_q = model.gradient(x)
+        inv_m = (1.0 / masses).repeat_interleave(3)
+        expected = (grad_q**2 * inv_m).sum(dim=-1).mean()
+        torch.testing.assert_close(loss, expected, atol=1e-6, rtol=1e-6)
+
+    def test_mass_weighted_uniform_masses_equals_unweighted_scaled(self, default_dtype):
+        """With uniform masses, mass-weighted = unweighted / m."""
+        n_atoms = 2
+        model = CommittorMLP(input_dim=n_atoms * 3, hidden_dims=[16])
+        m = 10.0
+        masses = torch.tensor([m, m])
+        loss_mw = BKELoss(model, atom_masses=masses)
+        loss_uw = BKELoss(model)
+        x = torch.randn(5, n_atoms * 3)
+        torch.testing.assert_close(
+            loss_mw(x), loss_uw(x) / m, atol=1e-6, rtol=1e-6,
+        )
+
+    def test_mass_weighted_none_is_backward_compat(self, default_dtype):
+        """atom_masses=None gives same result as before."""
+        model = CommittorMLP(input_dim=4, hidden_dims=[16])
+        loss_fn = BKELoss(model, atom_masses=None)
+        x = torch.randn(10, 4)
+        loss = loss_fn(x)
+        assert loss.shape == ()
+        assert loss >= 0
+
+    def test_chunked_matches_full_batch(self, default_dtype):
+        """Micro-batched BKE is identical to a single pass on small MLPs."""
+        model = CommittorMLP(input_dim=2, hidden_dims=[16])
+        x = torch.randn(24, 2)
+        w = torch.softmax(torch.randn(24), dim=0)
+        full = BKELoss(model, bke_max_batch=64)(x, weights=w)
+        chunked = BKELoss(model, bke_max_batch=4)(x, weights=w)
+        torch.testing.assert_close(chunked, full, atol=1e-6, rtol=1e-5)
+
 
 class TestBoundaryLoss:
     def test_zero_when_perfect(self, default_dtype):

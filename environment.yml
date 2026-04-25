@@ -16,6 +16,10 @@
 # If you created the env without the pip section, run:
 #   pip install -e ".[dev]"
 #
+# If MACE/SciPy import fails (RecursionError in numpy dtype code) or
+# transformers says packaging version is None: conda update to scipy>=1.14
+# and a single clean packaging, or recreate the env with this file.
+#
 # Optional: after `conda activate`, you can `source scripts/conda-ld-library-path.sh`
 # in new shells to prepend $CONDA_PREFIX/lib for every command (the Python
 # entrypoints in this repo also do this in-process for OpenMM).
@@ -39,8 +43,10 @@ dependencies:
   - openmm-torch=1.5.1=cuda126py312*
   - pdbfixer
   - mdtraj
+  # scipy<1.14 with numpy 2.x can RecursionError in scipy.interpolate (breaks mace-torch)
   - numpy
-  - scipy
+  - scipy>=1.14
+  - packaging>=23
   - pydantic>=2
   - tqdm
   # PyTorch 2.6.0 CUDA 12.6 build (GPU tensors + autograd)
@@ -52,6 +58,11 @@ dependencies:
   - hypothesis
   - pip
   - pip:
+      # mace-torch imports torchmetrics; an unpinned install can pull torch>=2.11 and
+      # break the conda-forge pytorch=2.6 cuda126 / openmm-torch stack. Install first.
+      - "torchmetrics>=1.3.0,<1.9.0"
+      - "torch-ema>=0.3"
+      - "lightning-utilities>=0.8.0,<0.16"
       # MACE foundation model support (auto-downloads MACE-OFF23, MACE-MP-0)
       - "mace-torch>=0.3.12"
       - "e3nn>=0.4.4"

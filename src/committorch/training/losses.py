@@ -34,19 +34,38 @@ class BKELoss(nn.Module):
     r"""Backward Kolmogorov equation variational loss.
 
     .. math::
-        L_\mathrm{BKE} = \frac{1}{N} \sum_i w_i |\nabla_x q(x_i)|^2
+        L_\mathrm{BKE} = \frac{1}{N} \sum_i w_i \sum_j \frac{1}{m_j}
+                         \left(\frac{\partial q}{\partial x_j}\right)^2
 
-    where w_i are importance-sampling weights (default 1).
+    where w_i are importance-sampling weights (default 1) and m_j are
+    atomic masses (default 1, giving the unweighted |nabla_x q|^2).
 
     Parameters
     ----------
     model : CommittorModel
         The committor network.
+    atom_masses : torch.Tensor or None
+        Atomic masses, shape (n_atoms,).  Each mass is repeated 3 times
+        internally to cover (x, y, z).  None for unweighted (toy problems).
+    bke_max_batch : int
+        Micro-batch size for :meth:`model.gradient` (large equivariant models
+        OOM if the full buffer is one forward+backward at once). Default 8.
     """
 
-    def __init__(self, model: CommittorModel) -> None:
+    def __init__(
+        self,
+        model: CommittorModel,
+        atom_masses: torch.Tensor | None = None,
+        bke_max_batch: int = 8,
+    ) -> None:
         super().__init__()
         self.model = model
+        self.bke_max_batch = max(1, int(bke_max_batch))
+        if atom_masses is not None:
+            inv_masses = (1.0 / atom_masses).repeat_interleave(3)
+            self.register_buffer("inv_masses", inv_masses)
+        else:
+            self.inv_masses = None
 
     def forward(
         self,
@@ -67,11 +86,29 @@ class BKELoss(nn.Module):
         torch.Tensor
             Scalar loss.
         """
-        grad_q = self.model.gradient(x)
-        grad_sq = (grad_q**2).sum(dim=-1)
-        if weights is not None:
-            return (weights * grad_sq).mean()
-        return grad_sq.mean()
+        n = x.shape[0]
+        if n == 0:
+            z = torch.zeros((), device=x.device, dtype=x.dtype)
+            return z
+
+        chunk = self.bke_max_batch
+        acc = torch.zeros((), device=x.device, dtype=x.dtype)
+        for start in range(0, n, chunk):
+            end = min(start + chunk, n)
+            wchunk = None if weights is None else weights[start:end]
+            grad_q = self.model.gradient(x[start:end])
+            if self.inv_masses is not None:
+                inv = self.inv_masses.to(
+                    device=grad_q.device, dtype=grad_q.dtype
+                )
+                grad_sq = (grad_q**2 * inv).sum(dim=-1)
+            else:
+                grad_sq = (grad_q**2).sum(dim=-1)
+            if wchunk is not None:
+                acc = acc + (wchunk * grad_sq).sum()
+            else:
+                acc = acc + grad_sq.sum()
+        return acc / n
 
 
 class BoundaryLoss(nn.Module):

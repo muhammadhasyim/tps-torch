@@ -308,6 +308,47 @@ class OPESBias:
         kT = 1.0 / self.beta
         return kT * torch.log(torch.tensor(self._sum_weights / self._counter)).item()
 
+    def state_dict(self) -> dict:
+        """Serialize kernel state and running sums for checkpointing.
+
+        Returns a dict with 1-D tensors for kernel data (suitable for
+        ``register_buffer`` in a TorchForce module) and scalars for
+        running statistics.
+        """
+        if self._kernels:
+            centers = torch.tensor([k.center for k in self._kernels])
+            sigmas = torch.tensor([k.sigma for k in self._kernels])
+            weights = torch.tensor([k.weight for k in self._kernels])
+        else:
+            centers = torch.tensor([])
+            sigmas = torch.tensor([])
+            weights = torch.tensor([])
+        return {
+            "kernel_centers": centers,
+            "kernel_sigmas": sigmas,
+            "kernel_weights": weights,
+            "sum_weights": self._sum_weights,
+            "sum_weights2": self._sum_weights2,
+            "counter": self._counter,
+            "Zed": self._Zed,
+            "bias_prefactor": self.bias_prefactor,
+            "epsilon": self.epsilon,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Restore kernel state and running sums from a checkpoint."""
+        centers = state["kernel_centers"]
+        sigmas = state["kernel_sigmas"]
+        weights = state["kernel_weights"]
+        self._kernels = [
+            _Kernel(center=c.item(), sigma=s.item(), weight=w.item())
+            for c, s, w in zip(centers, sigmas, weights)
+        ]
+        self._sum_weights = float(state["sum_weights"])
+        self._sum_weights2 = float(state["sum_weights2"])
+        self._counter = int(state["counter"])
+        self._Zed = float(state["Zed"])
+
 
 class CombinedVKOPES:
     """Combined V_K + OPES bias (Paper 2's V_eff = V_K + V_OPES).

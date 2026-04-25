@@ -352,6 +352,11 @@ def train(
     )
 
     atomic_numbers = _get_atomic_numbers_from_topology(simulation.topology)
+    atom_masses = torch.tensor(
+        [system.getParticleMass(i).value_in_unit(unit.dalton)
+         for i in range(n_atoms)],
+        dtype=torch.float32,
+    )
 
     logger.info("Building %s model with %d atoms", foundation_model, n_atoms)
     model = build_model(
@@ -385,6 +390,7 @@ def train(
     if method == "opes":
         from committorch.training.protein_loop import ProteinOPESLoop
 
+        eff_bias_type = bias_type if bias_type != "umbrella" else "combined_vk_opes"
         loop = ProteinOPESLoop(
             model=model,
             simulator=sim,
@@ -397,7 +403,8 @@ def train(
             collect_interval=collect_interval,
             n_sim_steps=n_sim_steps,
             lr=lr,
-            bias_type=bias_type,
+            bias_type=eff_bias_type,
+            atom_masses=atom_masses,
         )
     elif method == "umbrella":
         from committorch.training.protein_loop import ProteinUmbrellaLoop
@@ -441,17 +448,17 @@ def train(
 
         if (it + 1) % checkpoint_interval == 0:
             ckpt_path = out / f"checkpoint_{it+1:05d}.pt"
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": loop.optimizer.state_dict(),
-                    "iteration": it + 1,
-                    "loss_history": loop.state.loss_history,
-                    "bke_history": loop.state.bke_history,
-                    "boundary_history": loop.state.boundary_history,
-                },
-                ckpt_path,
-            )
+            ckpt_data = {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": loop.optimizer.state_dict(),
+                "iteration": it + 1,
+                "loss_history": loop.state.loss_history,
+                "bke_history": loop.state.bke_history,
+                "boundary_history": loop.state.boundary_history,
+            }
+            if method == "opes":
+                ckpt_data["opes_state"] = loop.opes_state_dict()
+            torch.save(ckpt_data, ckpt_path)
             logger.info("Saved checkpoint to %s", ckpt_path)
 
     final_path = out / "committor_final.pt"
@@ -520,10 +527,11 @@ def main() -> None:
     parser.add_argument("--opes_sigma", type=float, default=0.5)
     parser.add_argument(
         "--bias_type",
-        default="umbrella",
-        choices=["umbrella", "kolmogorov", "none"],
+        default="combined_vk_opes",
+        choices=["umbrella", "kolmogorov", "combined_vk_opes", "none"],
         help=(
-            "TorchForce bias type for OpenMM MD. 'umbrella' (default) applies a "
+            "TorchForce bias type for OpenMM MD. 'combined_vk_opes' (default) uses "
+            "two TorchForces: V_K + V_OPES. 'umbrella' applies a "
             "harmonic bias on z toward 0.5. 'kolmogorov' uses V_K with 2nd-order "
             "gradients. 'none' disables the NN bias."
         ),

@@ -21,7 +21,8 @@ dependencies:
   - pdbfixer
   - mdtraj
   - numpy
-  - scipy
+  - scipy>=1.14
+  - packaging>=23
   - pydantic>=2
   - tqdm
   - pytorch-cpu>=2

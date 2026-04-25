@@ -10,7 +10,7 @@ on real molecular systems:
 5. Repeat
 
 Two variants:
-- ``ProteinOPESLoop``: V_K + OPES metadynamics (Paper 2)
+- ``ProteinOPESLoop``: V_K + OPES metadynamics (Paper 2, arXiv:2410.17029)
 - ``ProteinUmbrellaLoop``: committor-umbrella windows (Paper 1)
 """
 
@@ -29,14 +29,17 @@ logger = logging.getLogger(__name__)
 
 
 class ProteinOPESLoop(ActiveLearningLoop):
-    """Active learning with V_K + OPES for protein systems via OpenMM.
+    r"""Active learning with V_K + OPES for protein systems via OpenMM.
 
-    The key difference from the toy ``OPESLoop``:
-    - Uses ``OpenMMSimulator`` with TorchForce-based biasing
-    - After each training epoch, re-serializes the committor model and
-      calls ``simulator.refresh_bias()`` to inject updated parameters
-    - Handles 3D atomic positions ``(n_atoms, 3)``
-    - Boundary configurations come from PDB structures
+    Implements the iterative scheme from arXiv:2410.17029:
+
+    1. Run biased MD with V_eff = V_K + V_OPES (two TorchForce objects).
+    2. Deposit OPES kernels on z(x) during MD (chunked: deposit then
+       refresh the V_OPES TorchForce between chunks).
+    3. Compute importance weights w_i = exp(beta V_eff(x_i)) / Z.
+    4. Accumulate (configs, log-weights) across iterations.
+    5. Train q_theta on the full accumulated dataset with reweighted BKE loss.
+    6. Re-serialize model into TorchForce and repeat.
 
     Parameters
     ----------
@@ -44,10 +47,8 @@ class ProteinOPESLoop(ActiveLearningLoop):
         Committor model (MLP, MACE, etc.).
     simulator : OpenMMSimulator
         OpenMM simulation with TorchForce bias.
-    x_a : torch.Tensor
-        Folded (reactant) configurations, shape (n_configs, n_atoms*3).
-    x_b : torch.Tensor
-        Unfolded (product) configurations, shape (n_configs, n_atoms*3).
+    x_a, x_b : torch.Tensor
+        Boundary configurations, shape (n_configs, n_atoms*3).
     vk_lambda : float
         Kolmogorov bias strength.
     opes_sigma : float
@@ -59,13 +60,20 @@ class ProteinOPESLoop(ActiveLearningLoop):
     opes_compression_threshold : float
         Merge OPES kernels closer than this.
     kernel_deposit_interval : int
-        Deposit a kernel every this many steps.
+        Deposit a kernel every this many collected snapshots.
     collect_interval : int
-        Collect positions every this many steps during MD.
+        Collect positions every this many MD steps.
     bias_type : str
-        Type of bias for TorchForce: "umbrella", "kolmogorov", "combined_vk_opes".
+        Type of bias for TorchForce.  ``"combined_vk_opes"`` (default)
+        uses two TorchForces: V_K (kolmogorov) + V_OPES.
     bias_params : dict or None
         Parameters for the TorchForce bias module.
+    max_buffer_size : int or None
+        Cap for the accumulated dataset.  When exceeded, the oldest
+        configs are dropped.  None means unlimited growth.
+    atom_masses : torch.Tensor or None
+        Atomic masses in amu, shape (n_atoms,).  Enables mass-weighted
+        gradients in the BKE loss.  None falls back to unweighted.
     """
 
     def __init__(
@@ -81,17 +89,25 @@ class ProteinOPESLoop(ActiveLearningLoop):
         opes_compression_threshold: float = 1.0,
         kernel_deposit_interval: int = 100,
         collect_interval: int = 50,
-        bias_type: str = "kolmogorov",
+        bias_type: str = "combined_vk_opes",
         bias_params: dict | None = None,
+        max_buffer_size: int | None = None,
+        atom_masses: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(model, simulator, x_a, x_b, **kwargs)
 
         from ..sampling.kolmogorov import KolmogorovBias
-        from ..sampling.opes import OPESBias
+        from ..sampling.opes import CombinedVKOPES, OPESBias
+        from .losses import BKELoss
+
+        # Replace the base-class BKELoss with mass-weighted version
+        if atom_masses is not None:
+            self.bke_loss_fn = BKELoss(model, atom_masses=atom_masses)
 
         self.openmm_sim: OpenMMSimulator = simulator
         beta = 1.0 / simulator.kT
+        self._beta = beta
 
         self.vk = KolmogorovBias(model, lam=vk_lambda, beta=beta)
         self.opes = OPESBias(
@@ -102,12 +118,18 @@ class ProteinOPESLoop(ActiveLearningLoop):
             beta=beta,
             compression_threshold=opes_compression_threshold,
         )
+        self.combined = CombinedVKOPES(self.vk, self.opes)
         self.kernel_deposit_interval = kernel_deposit_interval
         self.collect_interval = collect_interval
         self._bias_type = bias_type
         self._bias_params = dict(bias_params) if bias_params else {}
         self._bias_params.setdefault("lambda", vk_lambda)
         self._bias_params.setdefault("beta", beta)
+        self.max_buffer_size = max_buffer_size
+
+        # Accumulated dataset (paper: "all N_n configs until iteration n")
+        self._config_buffer: list[torch.Tensor] = []
+        self._log_weight_buffer: list[torch.Tensor] = []
 
         self.openmm_sim.model = model
 
@@ -115,14 +137,12 @@ class ProteinOPESLoop(ActiveLearningLoop):
             self._setup_openmm_bias()
 
     def _setup_openmm_bias(self) -> None:
-        """Initialize the TorchForce bias in the OpenMM system.
-
-        Silently skips if openmm-torch is not available (e.g. unit tests).
-        """
+        """Initialize the TorchForce bias in the OpenMM system."""
         try:
             self.openmm_sim.add_committor_bias(
                 bias_type=self._bias_type,
                 bias_params=self._bias_params,
+                opes_state=self.opes.state_dict(),
             )
         except ImportError:
             logger.warning(
@@ -130,37 +150,140 @@ class ProteinOPESLoop(ActiveLearningLoop):
             )
 
     def collect_samples(self) -> tuple[torch.Tensor, torch.Tensor | None]:
-        """Run biased OpenMM MD and collect snapshots.
+        r"""Run biased OpenMM MD, deposit kernels, compute weights.
+
+        MD is broken into chunks of ``kernel_deposit_interval`` snapshots.
+        After each chunk, OPES kernels are deposited and the V_OPES
+        TorchForce is refreshed so subsequent MD uses the updated bias.
+
+        New configs are appended to the growing buffer.  Returns the
+        *full accumulated* dataset with softmax-normalized importance
+        weights:
+
+        .. math::
+            w_i = \frac{\exp(\beta\, V_{\mathrm{eff}}(x_i))}
+                       {\sum_j \exp(\beta\, V_{\mathrm{eff}}(x_j))}
 
         Returns
         -------
-        configs : torch.Tensor, shape (n_snapshots, dim)
-        weights : torch.Tensor or None
+        configs : torch.Tensor, shape (N_accumulated, dim)
+        weights : torch.Tensor, shape (N_accumulated,)
         """
-        configs = self.openmm_sim.step_and_collect(
-            n_steps=self.n_sim_steps,
-            collect_interval=self.collect_interval,
-        )
-        if self.openmm_sim.flatten_positions and configs.dim() == 3:
-            configs = configs.reshape(configs.shape[0], -1)
+        total_snapshots = self.n_sim_steps // self.collect_interval
+        if total_snapshots < 1:
+            total_snapshots = 1
 
-        with torch.no_grad():
-            for i in range(configs.shape[0]):
-                if (i + 1) % self.kernel_deposit_interval == 0:
-                    z_val = self.model.latent(configs[i:i+1]).item()
+        chunk_size = max(self.kernel_deposit_interval, 1)
+        n_chunks = max(total_snapshots // chunk_size, 1)
+        steps_per_chunk = chunk_size * self.collect_interval
+
+        new_configs_list: list[torch.Tensor] = []
+
+        for _ in range(n_chunks):
+            configs_chunk = self.openmm_sim.step_and_collect(
+                n_steps=steps_per_chunk,
+                collect_interval=self.collect_interval,
+            )
+            if self.openmm_sim.flatten_positions and configs_chunk.dim() == 3:
+                configs_chunk = configs_chunk.reshape(configs_chunk.shape[0], -1)
+
+            new_configs_list.append(configs_chunk)
+
+            with torch.no_grad():
+                for i in range(configs_chunk.shape[0]):
+                    z_val = self.model.latent(configs_chunk[i : i + 1]).item()
                     self.opes.deposit_kernel(z_val)
 
+            # Refresh V_OPES TorchForce with updated kernels
+            try:
+                self.openmm_sim.refresh_bias(
+                    self.model, opes_state=self.opes.state_dict(),
+                )
+            except ImportError:
+                pass
+
+        new_configs = torch.cat(new_configs_list, dim=0)
+
+        # Importance weights must match the bias used in OpenMM (TorchForce).
+        if self._bias_type == "umbrella":
+            target = float(self._bias_params.get("target", 0.5))
+            kappa = float(self._bias_params.get("spring_constant", 100.0))
+            # MACE and other large encoders OOM on wide batches for q(x).
+            infer_chunk = int(self._bias_params.get("inference_max_batch", 4))
+            infer_chunk = max(1, infer_chunk)
+            with torch.no_grad():
+                ncfg = new_configs.shape[0]
+                q_parts: list[torch.Tensor] = []
+                for s in range(0, ncfg, infer_chunk):
+                    e = min(s + infer_chunk, ncfg)
+                    q_parts.append(self.model(new_configs[s:e]))
+                q = torch.cat(q_parts, dim=0)
+                if q.dim() > 1:
+                    q = q.squeeze(-1)
+                v_eff = 0.5 * kappa * (q - target) ** 2
+        elif self._bias_type == "kolmogorov":
+            # V_K only (no OPES in OpenMM)
+            with torch.enable_grad():
+                v_eff = self.vk.bias_energy(new_configs)
+            v_eff = v_eff.detach()
+        elif self._bias_type == "none":
+            w0 = next(self.model.parameters())
+            v_eff = torch.zeros(
+                new_configs.shape[0],
+                device=w0.device,
+                dtype=w0.dtype,
+            )
+        else:
+            # combined_vk_opes: V_K + V_OPES (V_K uses autograd.create_graph)
+            with torch.enable_grad():
+                v_eff = self.combined.bias_energy(new_configs)
+            v_eff = v_eff.detach()
+        log_w = self._beta * v_eff
+
+        self._config_buffer.append(new_configs.detach().cpu())
+        self._log_weight_buffer.append(log_w.detach().cpu())
+
+        # Enforce buffer cap
+        if self.max_buffer_size is not None:
+            self._trim_buffer()
+
+        # Assemble full accumulated dataset
+        all_configs = torch.cat(self._config_buffer, dim=0)
+        all_log_w = torch.cat(self._log_weight_buffer, dim=0)
+
+        # Normalize weights via log-sum-exp for numerical stability
+        all_log_w = all_log_w - all_log_w.max()
+        weights = torch.exp(all_log_w)
+        weights = weights / weights.sum()
+
+        device = next(self.model.parameters()).device
+        all_configs = all_configs.to(device)
+        weights = weights.to(device)
+
         logger.info(
-            "Collected %d snapshots, %d OPES kernels total",
-            configs.shape[0],
+            "Collected %d new snapshots (%d total accumulated), "
+            "%d OPES kernels",
+            new_configs.shape[0],
+            all_configs.shape[0],
             self.opes.n_kernels,
         )
-        return configs, None
+        return all_configs, weights
+
+    def _trim_buffer(self) -> None:
+        """Drop oldest entries if buffer exceeds max_buffer_size."""
+        assert self.max_buffer_size is not None
+        total = sum(c.shape[0] for c in self._config_buffer)
+        while total > self.max_buffer_size and len(self._config_buffer) > 1:
+            dropped = self._config_buffer.pop(0)
+            self._log_weight_buffer.pop(0)
+            total -= dropped.shape[0]
 
     def update_bias(self) -> None:
-        """Re-serialize model and swap TorchForce in OpenMM."""
+        """Re-serialize model + current OPES state and swap TorchForce."""
         try:
-            self.openmm_sim.refresh_bias(self.model)
+            self.openmm_sim.refresh_bias(
+                self.model, opes_state=self.opes.state_dict(),
+            )
             logger.debug("Refreshed OpenMM bias after training step")
         except ImportError:
             logger.warning("openmm-torch not available; skipping bias refresh")
@@ -168,11 +291,27 @@ class ProteinOPESLoop(ActiveLearningLoop):
     @property
     def diagnostics(self) -> dict[str, float]:
         """Return OPES convergence diagnostics."""
+        total_configs = sum(c.shape[0] for c in self._config_buffer)
         return {
             "n_kernels": self.opes.n_kernels,
             "rct": self.opes.rct,
             "ess": self.opes.effective_sample_size,
+            "n_accumulated": total_configs,
         }
+
+    def opes_state_dict(self) -> dict:
+        """Full checkpoint state: OPES kernels + accumulated buffer."""
+        return {
+            "opes": self.opes.state_dict(),
+            "config_buffer": self._config_buffer,
+            "log_weight_buffer": self._log_weight_buffer,
+        }
+
+    def load_opes_state_dict(self, state: dict) -> None:
+        """Restore OPES kernels and accumulated buffer from checkpoint."""
+        self.opes.load_state_dict(state["opes"])
+        self._config_buffer = state.get("config_buffer", [])
+        self._log_weight_buffer = state.get("log_weight_buffer", [])
 
 
 class ProteinUmbrellaLoop(ActiveLearningLoop):
