@@ -98,18 +98,25 @@ class ActiveLearningLoop(ABC):
         """Update bias potential / string after model parameter update."""
 
     def train_step(self, configs: torch.Tensor, weights: torch.Tensor | None) -> float:
-        """One gradient update on BKE + boundary loss."""
+        """One gradient update on BKE + boundary loss.
+
+        Uses per-chunk gradient accumulation for BKE to avoid holding
+        all MACE computation graphs in GPU memory simultaneously.
+        """
         self.optimizer.zero_grad()
-        bke = self.bke_loss_fn(configs, weights)
+        bke = self.bke_loss_fn(configs, weights, accumulate_grads=True)
         bc = self.boundary_loss_fn(self.x_a, self.x_b)
-        loss = bke + self.lambda_boundary * bc
-        loss.backward()
+        bc_scaled = self.lambda_boundary * bc
+        bc_scaled.backward()
         self.optimizer.step()
 
-        self.state.bke_history.append(bke.item())
-        self.state.boundary_history.append(bc.item())
-        self.state.loss_history.append(loss.item())
-        return loss.item()
+        bke_val = bke.item()
+        bc_val = bc.item()
+        loss_val = bke_val + self.lambda_boundary * bc_val
+        self.state.bke_history.append(bke_val)
+        self.state.boundary_history.append(bc_val)
+        self.state.loss_history.append(loss_val)
+        return loss_val
 
     def run(self, n_iterations: int, progress: bool = True) -> LoopState:
         """Run the full active learning loop.

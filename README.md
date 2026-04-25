@@ -53,7 +53,13 @@ conda activate tpstorch
 conda install -c conda-forge "pytorch=*=*cuda*"  # adjust CUDA level to match your driver; remove pytorch-cpu if conda asks
 ```
 
-**Pure pip** (no conda):
+**Critical: openmm-torch must come from conda-forge.** The PyPI package `openmmtorch` is a Python-only stub that does **not** include the C++/CUDA platform kernels TorchForce needs. Without the native libraries, `HAS_OPENMM_TORCH` silently becomes `False` and training runs unbiased MD — no V_K bias, no OPES bias, no bias refresh. The only supported install path:
+
+```bash
+conda install -c conda-forge openmm-torch   # provides _openmmtorch.*.so + plugin libs
+```
+
+**Pure pip** (no conda) — for development/testing only, **not** for production training:
 
 ```bash
 pip install -e .
@@ -62,8 +68,8 @@ pip install -e .
 With optional dependencies:
 
 ```bash
-pip install -e ".[all]"        # everything
-pip install -e ".[openmm]"     # OpenMM + openmmtorch from PyPI (may mix with system libstdc++)
+pip install -e ".[all]"        # everything (openmm-torch still needs conda for native libs)
+pip install -e ".[openmm]"     # OpenMM + openmmtorch Python stub from PyPI
 pip install -e ".[openmm-from-conda]"  # only openmmtorch — use when OpenMM is from conda
 pip install -e ".[equivariant]" # e3nn, MACE, SchNetPack
 pip install -e ".[dev]"        # pytest, ruff, mypy

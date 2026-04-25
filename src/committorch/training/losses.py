@@ -71,6 +71,7 @@ class BKELoss(nn.Module):
         self,
         x: torch.Tensor,
         weights: torch.Tensor | None = None,
+        accumulate_grads: bool = False,
     ) -> torch.Tensor:
         """Compute BKE loss.
 
@@ -80,6 +81,10 @@ class BKELoss(nn.Module):
             Configurations (need not require grad; handled internally).
         weights : torch.Tensor or None, shape (batch,)
             Importance-sampling weights.  If None, uniform weighting.
+        accumulate_grads : bool
+            If True, call backward() per chunk to avoid holding all
+            computation graphs in memory simultaneously.  Returns a
+            detached scalar (parameter gradients are already accumulated).
 
         Returns
         -------
@@ -92,6 +97,28 @@ class BKELoss(nn.Module):
             return z
 
         chunk = self.bke_max_batch
+
+        if accumulate_grads:
+            total = 0.0
+            for start in range(0, n, chunk):
+                end = min(start + chunk, n)
+                wchunk = None if weights is None else weights[start:end]
+                grad_q = self.model.gradient(x[start:end])
+                if self.inv_masses is not None:
+                    inv = self.inv_masses.to(
+                        device=grad_q.device, dtype=grad_q.dtype
+                    )
+                    grad_sq = (grad_q**2 * inv).sum(dim=-1)
+                else:
+                    grad_sq = (grad_q**2).sum(dim=-1)
+                if wchunk is not None:
+                    chunk_loss = (wchunk * grad_sq).sum() / n
+                else:
+                    chunk_loss = grad_sq.sum() / n
+                chunk_loss.backward()
+                total += chunk_loss.item()
+            return torch.tensor(total, device=x.device, dtype=x.dtype)
+
         acc = torch.zeros((), device=x.device, dtype=x.dtype)
         for start in range(0, n, chunk):
             end = min(start + chunk, n)

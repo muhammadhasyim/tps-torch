@@ -37,15 +37,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Note: PyTorch NN forces use the PyPI package *openmmtorch* (import name: openmmtorch).
-# The hyphenated name "openmm-torch" is conda-forge; it is not published on PyPI.
+# IMPORTANT: The PyPI 'openmmtorch' package is a Python-only stub.  It does
+# NOT include the C++/CUDA platform kernels required by TorchForce.  Without
+# those kernels, TorchForce silently fails on ALL OpenMM platforms and the
+# training loop falls back to unbiased MD.
+#
+# The ONLY supported installation path for openmm-torch is conda-forge:
+#   conda install -c conda-forge openmm-torch
+#
+# The pip extras below install the Python wrapper for import compatibility,
+# but you MUST also have the conda-forge native libraries.
 openmm = [
     "openmm>=8.0",
     "openmmtorch>=1.5",
     "pdbfixer>=1.8",
 ]
-# Use with conda-installed OpenMM + pdbfixer (see environment.yml) to avoid a
-# second OpenMM build from pip and mixed libstdc++/CUDA stacks.
 openmm-from-conda = [
     "openmmtorch>=1.5",
 ]

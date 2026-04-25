@@ -10,7 +10,7 @@ In terms of the pre-sigmoid latent z(x) (numerically stable form from
 Paper 2 SI):
 
 .. math::
-    V_K(x) = \frac{\lambda}{\beta}\bigl[
+    V_K(x) = -\frac{\lambda}{\beta}\bigl[
         \log|\nabla_x z(x)|^2
         - 4\log(1 + e^{-p z(x)})
         - 2 p z(x)
@@ -86,7 +86,7 @@ class KolmogorovBias(BiasStrategy):
         softplus_term = 4.0 * torch.nn.functional.softplus(-p * z)
         linear_term = 2.0 * p * z
 
-        vk = (self.lam / self.beta) * (log_grad_z_sq - softplus_term - linear_term)
+        vk = -(self.lam / self.beta) * (log_grad_z_sq - softplus_term - linear_term)
         return vk
 
     def transition_state_density(self, x: torch.Tensor) -> torch.Tensor:

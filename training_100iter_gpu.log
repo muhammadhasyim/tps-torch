@@ -1,0 +1,425 @@
+INFO:__main__:Loading system from output/system.xml
+INFO:__main__:Building mace-off-small model with 138 atoms
+/usr/local/lib/python3.12/site-packages/e3nn/o3/_wigner.py:10: UserWarning: Environment variable TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD detected, since the`weights_only` argument was not explicitly passed to `torch.load`, forcing weights_only=False.
+  _Jd, _W3j_flat, _W3j_indices = torch.load(os.path.join(os.path.dirname(__file__), 'constants.pt'))
+cuequivariance or cuequivariance_torch is not available. Cuequivariance acceleration will be disabled.
+Using MACE-OFF23 MODEL for MACECalculator with /root/.cache/mace/MACE-OFF23_small.model
+/usr/local/lib/python3.12/site-packages/mace/calculators/foundations_models.py:272: UserWarning: Environment variable TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD detected, since the`weights_only` argument was not explicitly passed to `torch.load`, forcing weights_only=False.
+  return torch.load(model, map_location=device)
+INFO:committorch.models.equivariant.mace:Loaded mace-off-small (694320 params, r_max=4.5 A)
+INFO:__main__:Model device: cuda
+INFO:__main__:Generating folded boundary configs...
+INFO:__main__:Generating unfolded boundary configs...
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping TorchForce setup
+INFO:__main__:Starting training: 100 iterations (from 0)
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (50 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 1: loss=5.0181e-01, bke=3.1051e-08, boundary=5.0181e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.1025, ess=49.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (100 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 2: loss=5.0166e-01, bke=1.6923e-08, boundary=5.0166e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0464, ess=99.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (150 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 3: loss=5.0151e-01, bke=1.2675e-08, boundary=5.0151e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0277, ess=149.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (200 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 4: loss=5.0139e-01, bke=5.1805e-09, boundary=5.0139e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0184, ess=199.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (250 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 5: loss=5.0126e-01, bke=5.6923e-09, boundary=5.0126e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0129, ess=249.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (300 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 6: loss=5.0114e-01, bke=5.2415e-09, boundary=5.0114e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0093, ess=299.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (350 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 7: loss=5.0102e-01, bke=5.0069e-09, boundary=5.0102e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0067, ess=349.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (400 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 8: loss=5.0091e-01, bke=4.9062e-09, boundary=5.0091e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0049, ess=399.0268
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (450 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 9: loss=5.0080e-01, bke=4.9108e-09, boundary=5.0080e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0035, ess=449.0267
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (500 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 10: loss=5.0069e-01, bke=4.9982e-09, boundary=5.0069e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0025, ess=499.0267
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000010.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (550 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 11: loss=5.0060e-01, bke=5.1479e-09, boundary=5.0060e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0017, ess=549.0267
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (600 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 12: loss=5.0051e-01, bke=5.3504e-09, boundary=5.0051e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0011, ess=599.0266
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (650 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 13: loss=5.0042e-01, bke=5.6003e-09, boundary=5.0042e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0007, ess=649.0265
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (700 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 14: loss=5.0035e-01, bke=5.2126e-09, boundary=5.0035e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0004, ess=699.0264
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (750 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 15: loss=5.0028e-01, bke=5.5669e-09, boundary=5.0028e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0003, ess=749.0262
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (800 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 16: loss=5.0022e-01, bke=5.9481e-09, boundary=5.0022e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0002, ess=799.0260
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (850 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 17: loss=5.0017e-01, bke=6.3510e-09, boundary=5.0017e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0002, ess=849.0258
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (900 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 18: loss=5.0012e-01, bke=6.2982e-09, boundary=5.0012e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0002, ess=899.0254
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (950 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 19: loss=5.0008e-01, bke=6.7284e-09, boundary=5.0008e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0003, ess=949.0250
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1000 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 20: loss=5.0005e-01, bke=7.1668e-09, boundary=5.0005e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0005, ess=999.0245
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000020.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1050 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 21: loss=5.0003e-01, bke=5.8544e-09, boundary=5.0003e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0007, ess=1049.0238
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1100 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 22: loss=5.0001e-01, bke=6.2921e-09, boundary=5.0001e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0010, ess=1099.0231
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1150 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 23: loss=5.0000e-01, bke=6.7121e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0013, ess=1149.0223
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1200 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 24: loss=5.0000e-01, bke=7.1050e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0016, ess=1199.0214
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1250 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 25: loss=5.0000e-01, bke=7.4563e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0019, ess=1249.0205
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1300 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 26: loss=5.0000e-01, bke=7.7574e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0022, ess=1299.0195
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1350 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 27: loss=5.0001e-01, bke=7.9951e-09, boundary=5.0001e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0025, ess=1349.0185
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1400 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 28: loss=5.0002e-01, bke=8.1624e-09, boundary=5.0002e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0029, ess=1399.0175
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1450 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 29: loss=5.0002e-01, bke=8.2522e-09, boundary=5.0002e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0031, ess=1449.0165
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1500 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 30: loss=5.0003e-01, bke=7.9178e-09, boundary=5.0003e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0034, ess=1499.0157
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000030.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1550 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 31: loss=5.0004e-01, bke=7.8609e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0036, ess=1549.0149
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1600 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 32: loss=5.0004e-01, bke=7.7347e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0038, ess=1599.0143
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1650 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 33: loss=5.0004e-01, bke=7.7446e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0040, ess=1649.0139
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1700 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 34: loss=5.0004e-01, bke=7.5046e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0041, ess=1699.0136
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1750 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 35: loss=5.0004e-01, bke=7.2199e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0042, ess=1749.0134
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1800 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 36: loss=5.0004e-01, bke=6.9036e-09, boundary=5.0004e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0042, ess=1799.0132
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1850 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 37: loss=5.0003e-01, bke=6.5680e-09, boundary=5.0003e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0042, ess=1849.0132
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1900 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 38: loss=5.0003e-01, bke=6.2211e-09, boundary=5.0003e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0042, ess=1899.0132
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (1950 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 39: loss=5.0002e-01, bke=5.8738e-09, boundary=5.0002e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0041, ess=1949.0132
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2000 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 40: loss=5.0002e-01, bke=5.5329e-09, boundary=5.0002e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0040, ess=1999.0132
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000040.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2050 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 41: loss=5.0001e-01, bke=5.2032e-09, boundary=5.0001e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0039, ess=2049.0131
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2100 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 42: loss=5.0001e-01, bke=4.8904e-09, boundary=5.0001e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0037, ess=2099.0131
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2150 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 43: loss=5.0000e-01, bke=4.5972e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0035, ess=2149.0129
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2200 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 44: loss=5.0000e-01, bke=4.3257e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0034, ess=2199.0128
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2250 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 45: loss=5.0000e-01, bke=4.0772e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0032, ess=2249.0126
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2300 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 46: loss=5.0000e-01, bke=3.8518e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0030, ess=2299.0123
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2350 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 47: loss=5.0000e-01, bke=3.6495e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0028, ess=2349.0120
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2400 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 48: loss=5.0000e-01, bke=3.4693e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0026, ess=2399.0117
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2450 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 49: loss=5.0000e-01, bke=3.3107e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0024, ess=2449.0114
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2500 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 50: loss=5.0000e-01, bke=3.1721e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0022, ess=2499.0110
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000050.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2550 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 51: loss=5.0000e-01, bke=3.0523e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0020, ess=2549.0107
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2600 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 52: loss=5.0000e-01, bke=2.9497e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0018, ess=2599.0103
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2650 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 53: loss=5.0000e-01, bke=2.8630e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0016, ess=2649.0099
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2700 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 54: loss=5.0000e-01, bke=2.7909e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0014, ess=2699.0095
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2750 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 55: loss=5.0000e-01, bke=2.7317e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0013, ess=2749.0092
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2800 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 56: loss=5.0000e-01, bke=2.6844e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0011, ess=2799.0088
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2850 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 57: loss=5.0000e-01, bke=2.6478e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0009, ess=2849.0084
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2900 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 58: loss=5.0000e-01, bke=2.6204e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0007, ess=2899.0081
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (2950 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 59: loss=5.0000e-01, bke=2.6015e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0006, ess=2949.0078
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3000 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 60: loss=5.0000e-01, bke=2.5897e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0004, ess=2999.0074
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000060.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3050 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 61: loss=5.0000e-01, bke=2.5838e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0003, ess=3049.0071
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3100 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 62: loss=5.0000e-01, bke=2.5830e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0001, ess=3099.0068
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3150 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 63: loss=5.0000e-01, bke=2.5863e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=-0.0000, ess=3149.0065
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3200 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 64: loss=5.0000e-01, bke=2.5928e-09, boundary=5.0000e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0001, ess=3199.0063
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3250 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 65: loss=4.9999e-01, bke=2.6015e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0002, ess=3249.0060
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3300 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 66: loss=4.9999e-01, bke=2.6117e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0004, ess=3299.0057
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3350 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 67: loss=4.9999e-01, bke=2.6224e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0005, ess=3349.0055
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3400 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 68: loss=4.9999e-01, bke=2.6328e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0006, ess=3399.0053
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3450 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 69: loss=4.9999e-01, bke=2.6424e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0007, ess=3449.0051
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3500 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 70: loss=4.9999e-01, bke=2.6506e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0008, ess=3499.0049
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000070.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3550 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 71: loss=4.9999e-01, bke=2.6565e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0009, ess=3549.0047
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3600 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 72: loss=4.9999e-01, bke=2.6603e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0010, ess=3599.0045
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3650 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 73: loss=4.9999e-01, bke=2.6614e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0011, ess=3649.0043
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3700 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 74: loss=4.9999e-01, bke=2.6597e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0012, ess=3699.0041
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3750 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 75: loss=4.9999e-01, bke=2.6549e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0013, ess=3749.0039
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3800 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 76: loss=4.9999e-01, bke=2.6476e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0014, ess=3799.0038
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3850 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 77: loss=4.9999e-01, bke=2.6373e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0015, ess=3849.0036
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3900 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 78: loss=4.9999e-01, bke=2.6243e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0016, ess=3899.0034
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (3950 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 79: loss=4.9999e-01, bke=2.6090e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0016, ess=3949.0033
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4000 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 80: loss=4.9999e-01, bke=2.5918e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0017, ess=3999.0031
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000080.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4050 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 81: loss=4.9999e-01, bke=2.5727e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0018, ess=4049.0029
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4100 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 82: loss=4.9999e-01, bke=2.5524e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0019, ess=4099.0028
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4150 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 83: loss=4.9999e-01, bke=2.5310e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0020, ess=4149.0026
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4200 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 84: loss=4.9999e-01, bke=2.5093e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0020, ess=4199.0025
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4250 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 85: loss=4.9999e-01, bke=2.4876e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0021, ess=4249.0023
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4300 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 86: loss=4.9999e-01, bke=2.4659e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0022, ess=4299.0021
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4350 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 87: loss=4.9999e-01, bke=2.4449e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0023, ess=4349.0020
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4400 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 88: loss=4.9999e-01, bke=2.4248e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0023, ess=4399.0018
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4450 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 89: loss=4.9999e-01, bke=2.4058e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0024, ess=4449.0016
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4500 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 90: loss=4.9999e-01, bke=2.3882e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0025, ess=4499.0015
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000090.pt
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4550 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 91: loss=4.9999e-01, bke=2.3721e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0026, ess=4549.0013
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4600 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 92: loss=4.9999e-01, bke=2.3575e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0026, ess=4599.0012
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4650 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 93: loss=4.9999e-01, bke=2.3445e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0027, ess=4649.0010
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4700 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 94: loss=4.9999e-01, bke=2.3334e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0028, ess=4699.0008
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4750 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 95: loss=4.9999e-01, bke=2.3240e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0028, ess=4749.0007
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4800 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 96: loss=4.9999e-01, bke=2.3162e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0029, ess=4799.0005
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4850 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 97: loss=4.9999e-01, bke=2.3102e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0030, ess=4849.0004
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4900 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 98: loss=4.9999e-01, bke=2.3058e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0030, ess=4899.0002
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (4950 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 99: loss=4.9999e-01, bke=2.3030e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0031, ess=4949.0001
+INFO:committorch.training.protein_loop:Collected 50 new snapshots (5000 total accumulated), 1 OPES kernels
+WARNING:committorch.training.protein_loop:openmm-torch not available; skipping bias refresh
+INFO:__main__:Iteration 100: loss=4.9999e-01, bke=2.3013e-09, boundary=4.9999e-01
+INFO:__main__:  OPES: n_kernels=1, rct=0.0031, ess=4998.9999
+INFO:__main__:Saved checkpoint to /mnt/shared/26-04-25-tps-torch/training_output/checkpoint_0000100.pt
+INFO:__main__:Training complete. Final model saved to /mnt/shared/26-04-25-tps-torch/training_output/committor_final.pt

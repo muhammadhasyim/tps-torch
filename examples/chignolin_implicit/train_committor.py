@@ -12,7 +12,15 @@ Usage
     With defaults (paths relative to this example directory):
     python train_committor.py --system_xml output/system.xml \\
                               --pdb_folded output/minimized.pdb \\
-                              --pdb_unfolded output/unfolded_solvated.pdb
+                              --pdb_unfolded output/unfolded_solvated.pdb \\
+                              --platform CUDA --require_cuda
+
+    The defaults (50k MD steps, 10 iterations, BARRIER=7 kT) are calibrated
+    for implicit solvent with MACE-OFF-small on GPU (~15 min/iteration).
+    The paper (arXiv:2410.17029) uses 200-1000 ns per iteration with explicit
+    solvent; implicit solvent dynamics are ~10-100x faster so fewer steps
+    suffice.  For production, increase --n_sim_steps to 200000+ and
+    --n_iterations to 5-6.
 
 ``system.xml`` is built from a **solvated** box; ``pdb_folded`` / ``pdb_unfolded`` must
 be **full solvated** PDBs with the same atom count as that system (e.g. from
@@ -587,14 +595,20 @@ def main() -> None:
                         help="Custom MACE checkpoint path (overrides auto-download)")
     parser.add_argument("--method", default="opes",
                         choices=["opes", "umbrella"])
-    parser.add_argument("--n_iterations", type=int, default=100)
-    parser.add_argument("--n_sim_steps", type=int, default=1000)
-    parser.add_argument("--collect_interval", type=int, default=100)
+    parser.add_argument("--n_iterations", type=int, default=10,
+                        help="Outer loop iterations (paper uses 5-6 for chignolin)")
+    parser.add_argument("--n_sim_steps", type=int, default=50000,
+                        help="MD steps per iteration. Paper runs 200-1000 ns with "
+                        "explicit solvent; 50 ps (50000 × 1 fs) is a reasonable "
+                        "starting point for implicit solvent with MACE TorchForce.")
+    parser.add_argument("--collect_interval", type=int, default=500,
+                        help="Collect snapshot every N steps. Paper: every 5-10 ps. "
+                        "500 steps × 1 fs = 0.5 ps gives ~100 configs per iteration.")
     parser.add_argument(
         "--kernel_deposit_interval",
         type=int,
-        default=50,
-        help="(OPES) deposit kernel every this many steps",
+        default=100,
+        help="(OPES) deposit kernel every this many MD steps. Paper: PACE=500.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--checkpoint_interval", type=int, default=10)
@@ -603,7 +617,8 @@ def main() -> None:
                         choices=["CPU", "CUDA", "OpenCL"])
     parser.add_argument("--temperature", type=float, default=340.0)
     parser.add_argument("--vk_lambda", type=float, default=1.0)
-    parser.add_argument("--opes_barrier", type=float, default=5.0)
+    parser.add_argument("--opes_barrier", type=float, default=7.0,
+                        help="OPES barrier in kT. Paper: BARRIER=20 kJ/mol ≈ 7 kT at 340K.")
     parser.add_argument("--opes_sigma", type=float, default=0.5)
     parser.add_argument(
         "--bias_type",

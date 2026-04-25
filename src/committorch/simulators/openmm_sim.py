@@ -49,11 +49,21 @@ except ImportError:
     pass
 
 HAS_OPENMM_TORCH = False
+_OPENMM_TORCH_ERR: str | None = None
 try:
     from openmmtorch import TorchForce
     HAS_OPENMM_TORCH = True
-except ImportError:
-    pass
+except ImportError as _exc:
+    _OPENMM_TORCH_ERR = (
+        f"openmm-torch failed to import: {_exc}\n"
+        "The pip 'openmmtorch' package is a Python stub without C++/CUDA "
+        "platform kernels.  Install the conda-forge package instead:\n"
+        "  conda install -c conda-forge openmm-torch\n"
+        "Without it, ALL TorchForce biases (V_K, V_OPES) are silently "
+        "disabled and training runs unbiased MD."
+    )
+    import warnings
+    warnings.warn(_OPENMM_TORCH_ERR, ImportWarning, stacklevel=1)
 
 
 class BiasType(str, Enum):
@@ -106,13 +116,12 @@ def _kolmogorov_bias_energy(
         (grad_z,) = torch.autograd.grad(
             z.sum(), x_grad, create_graph=True
         )
-
-    grad_z_sq = (grad_z**2).sum()
-    p = model.sigmoid_steepness
-    log_grad_z_sq = torch.log(grad_z_sq + eps)
-    softplus_term = 4.0 * F.softplus(-p * z)
-    linear_term = 2.0 * p * z
-    return (lam / beta) * (log_grad_z_sq - softplus_term - linear_term).squeeze()
+        grad_z_sq = (grad_z**2).sum()
+        p = model.sigmoid_steepness
+        log_grad_z_sq = torch.log(grad_z_sq + eps)
+        softplus_term = 4.0 * F.softplus(-p * z)
+        linear_term = 2.0 * p * z
+    return -(lam / beta) * (log_grad_z_sq - softplus_term - linear_term).squeeze()
 
 
 class CommittorBiasModule(nn.Module):
@@ -303,6 +312,102 @@ def _trace_staging_dir() -> str | None:
     return None
 
 
+class _LatentWrapper(nn.Module):
+    """Thin wrapper around ``model.latent()`` for JIT tracing."""
+
+    def __init__(self, model: CommittorModel) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model.latent(x)
+
+
+class _KolmogorovBiasScripted(nn.Module):
+    """TorchScript-compatible V_K bias using a traced latent sub-module.
+
+    ``torch.jit.trace`` cannot capture ``torch.autograd.grad`` with
+    ``create_graph=True`` in PyTorch >= 2.10 (gradient tensors are
+    rejected as constants).  This module side-steps the issue by
+    **scripting** the V_K computation while keeping the encoder as a
+    **traced** sub-module.  ``torch.jit.script`` records the autograd
+    ops symbolically so no tensor values are baked in.
+    """
+
+    __constants__ = ["lam", "beta", "eps", "sigmoid_steepness"]
+
+    def __init__(
+        self,
+        latent_model: torch.jit.ScriptModule,
+        lam: float,
+        beta: float,
+        eps: float,
+        sigmoid_steepness: float,
+    ) -> None:
+        super().__init__()
+        self.latent_model = latent_model
+        self.lam = lam
+        self.beta = beta
+        self.eps = eps
+        self.sigmoid_steepness = sigmoid_steepness
+
+    def forward(self, positions: torch.Tensor) -> torch.Tensor:
+        x = positions.reshape(1, -1)
+        x.requires_grad_(True)
+        z = self.latent_model(x)
+        grad_z_list = torch.autograd.grad([z.sum()], [x], create_graph=True)
+        grad_z = grad_z_list[0]
+        assert grad_z is not None
+        grad_z_sq = (grad_z ** 2).sum()
+        p = self.sigmoid_steepness
+        log_grad_z_sq = torch.log(grad_z_sq + self.eps)
+        softplus_term = 4.0 * torch.nn.functional.softplus(-p * z)
+        linear_term = 2.0 * p * z
+        return -(self.lam / self.beta) * (
+            log_grad_z_sq - softplus_term - linear_term
+        ).squeeze()
+
+
+def _serialize_kolmogorov_bias(
+    model: CommittorModel,
+    bias_params: dict | None = None,
+    n_atoms: int = 2,
+) -> str:
+    """Script a Kolmogorov V_K bias module (hybrid traced-encoder + scripted V_K).
+
+    Returns path to a saved TorchScript ``.pt`` file.
+    """
+    params = bias_params or {}
+    param_device = next(model.parameters()).device
+    param_dtype = next(model.parameters()).dtype
+
+    was_training = model.training
+    latent_wrapper = _LatentWrapper(model)
+    latent_wrapper.eval()
+    example = torch.randn(1, n_atoms * 3, device=param_device, dtype=param_dtype)
+    with torch.no_grad():
+        traced_latent = torch.jit.trace(latent_wrapper, example)
+    if was_training:
+        model.train()
+
+    vk_module = _KolmogorovBiasScripted(
+        latent_model=traced_latent,
+        lam=float(params.get("lambda", 1.0)),
+        beta=float(params.get("beta", 1.0)),
+        eps=float(params.get("eps", 1e-10)),
+        sigmoid_steepness=float(model.sigmoid_steepness),
+    )
+    scripted = torch.jit.script(vk_module)
+
+    staging = _trace_staging_dir()
+    tmp = tempfile.NamedTemporaryFile(
+        suffix=".pt", delete=False, dir=staging if staging else None
+    )
+    scripted.save(tmp.name)
+    tmp.close()
+    return tmp.name
+
+
 def _serialize_bias_module(
     model: CommittorModel,
     bias_type: str = "none",
@@ -311,8 +416,9 @@ def _serialize_bias_module(
 ) -> str:
     """Trace a CommittorBiasModule and save to a temp file.
 
-    Uses ``torch.jit.trace`` rather than ``torch.jit.script`` to
-    avoid JIT limitations (inline imports, dynamic dispatch).
+    For ``"kolmogorov"`` bias, delegates to :func:`_serialize_kolmogorov_bias`
+    which uses a hybrid scripted+traced approach compatible with
+    ``torch.autograd.grad(..., create_graph=True)`` on PyTorch >= 2.10.
 
     Parameters
     ----------
@@ -324,20 +430,18 @@ def _serialize_bias_module(
     str
         Path to the saved .pt file.
     """
+    if bias_type == "kolmogorov":
+        return _serialize_kolmogorov_bias(model, bias_params, n_atoms)
+
+    was_training = model.training
     bias_module = CommittorBiasModule(model, bias_type, bias_params)
     bias_module.eval()
-    # Trace on the model's own device so JIT ops are baked in for the correct
-    # device (CUDA or CPU).  TorchForce will call this module with positions on
-    # the same device as the OpenMM platform (CUDA when using Platform=CUDA).
     param_device = next(model.parameters()).device
     example_input = torch.randn(n_atoms, 3, device=param_device)
-    # Kolmogorov bias uses torch.autograd.grad with create_graph=True;
-    # wrapping in no_grad breaks tracing for that type.
-    if bias_type == "kolmogorov":
+    with torch.no_grad():
         traced = torch.jit.trace(bias_module, example_input)
-    else:
-        with torch.no_grad():
-            traced = torch.jit.trace(bias_module, example_input)
+    if was_training:
+        model.train()
     staging = _trace_staging_dir()
     tmp = tempfile.NamedTemporaryFile(
         suffix=".pt", delete=False, dir=staging if staging else None
@@ -370,6 +474,7 @@ def _serialize_opes_bias(
     str
         Path to the saved .pt file.
     """
+    was_training = model.training
     module = OPESBiasModule(
         model=model,
         beta=beta,
@@ -377,9 +482,12 @@ def _serialize_opes_bias(
     )
     module.eval()
     param_device = next(model.parameters()).device
+    module.to(param_device)
     example_input = torch.randn(n_atoms, 3, device=param_device)
     with torch.no_grad():
         traced = torch.jit.trace(module, example_input)
+    if was_training:
+        model.train()
     staging = _trace_staging_dir()
     tmp = tempfile.NamedTemporaryFile(
         suffix=".pt", delete=False, dir=staging if staging else None,
